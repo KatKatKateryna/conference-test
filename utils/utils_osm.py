@@ -14,7 +14,7 @@ from shapely import (
     BufferJoinStyle,
     LineString,
     Point,
-    Polygon,
+    Polygon,list
     buffer,
     offset_curve,
     to_geojson,
@@ -223,7 +223,7 @@ def getBuildings(lat: float, lon: float, r: float):
     return objectGroup
 
 
-def extrudeBuildings(coords: List[dict], height: float) -> Mesh:
+def extrudeBuildings(coords: list[dict], height: float) -> Mesh:
     vertices = []
     faces = []
     colors = []
@@ -607,7 +607,7 @@ def splitWaysByIntersection(ways: list, tags: list):
     return splitWays, splitTags
 
 
-def joinRoads(coords: List[dict], closed: bool, height: float):
+def joinRoads(coords: list[dict], closed: bool, height: float):
     from specklepy.objects.geometry import Polyline, Point
 
     points = []

@@ -1,6 +1,6 @@
 
 from copy import copy
-from typing import List
+from typing import list
 import numpy as np
 from specklepy.objects.geometry import Point
 
@@ -9,7 +9,7 @@ COLOR_ROAD = (255<<24) + (50<<16) + (50<<8) + 50 # argb
 COLOR_BLD = (255<<24) + (230<<16) + (230<<8) + 230 # argb
 COLOR_VISIBILITY = (255<<24) + (255<<16) + (10<<8) + 10 # argb
 
-def findMeshesNearby(cleanPts: List[Point]) -> List[Point]:
+def findMeshesNearby(cleanPts: list[Point]) -> list[Point]:
     # add indices of neighbouring meshes
     mesh_nearby = []
     for pt in cleanPts:
@@ -26,8 +26,8 @@ def findMeshesNearby(cleanPts: List[Point]) -> List[Point]:
         mesh_nearby.append(list(set(meshIds)))
     return mesh_nearby
 
-def sortPtsByMesh(cleanPts: List[Point]) -> List[Point]:
-    ptsGroups: List[List[np.array]] = []
+def sortPtsByMesh(cleanPts: list[Point]) -> list[Point]:
+    ptsGroups: list[list[np.array]] = []
     
     usedMeshIds = []
     for pt in cleanPts:
@@ -90,7 +90,7 @@ def cleanString(text: str) -> str:
         new_text = new_text.split(s)[0]#.replace(s, "")
     return new_text
 
-def fillList(vals: list, lsts: list) -> List[list]:
+def fillList(vals: list, lsts: list) -> list[list]:
     if len(vals)>1: 
         lsts.append([])
     else: return
