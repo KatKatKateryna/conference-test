@@ -26,11 +26,10 @@ class FunctionInputs(AutomateBase):
     https://docs.pydantic.dev/latest/usage/models/
     """
 
-    forbidden_speckle_type: str = Field(
-        title="Forbidden speckle type",
+    radius_in_meters: float = Field(
+        title="Radius in meters",
         description=(
-            "If a object has the following speckle_type,"
-            " it will be marked with an error."
+            "Radius from the Model location," " derived from Revit model lat, lon."
         ),
     )
 
@@ -121,7 +120,7 @@ def automate_function(
     except Exception as ex:
         automate_context.mark_run_failed(f"Failed to create 3d context cause: {ex}")
 
-    r'''
+    r"""
     version_root_object = automate_context.receive_version()
 
     count = 0
@@ -152,7 +151,7 @@ def automate_function(
     # if the function generates file results, this is how it can be
     # attached to the Speckle project / model
     # automate_context.store_file_result("./report.pdf")
-    '''
+    """
 
 
 def automate_function_without_inputs(automate_context: AutomationContext) -> None:
