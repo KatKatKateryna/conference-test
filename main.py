@@ -3,19 +3,20 @@
 use the automation_context module to wrap your function in an Autamate context helper
 """
 
+import numpy as np
 from pydantic import Field
 from speckle_automate import (
     AutomateBase,
     AutomationContext,
     execute_automate_function,
 )
-
-from flatten import flatten_base
 from specklepy.objects import Base
 from specklepy.objects.other import Collection
-import numpy as np
+
+from flatten import flatten_base
 from utils.utils_osm import getBuildings, getRoads
 from utils.utils_other import RESULT_BRANCH
+from utils.utils_png import createImageFromBbox
 
 
 class FunctionInputs(AutomateBase):
@@ -115,6 +116,10 @@ def automate_function(
         # automate_context.compose_result_view()
         automate_context._automation_result.result_view = f"{automate_context.automation_run_data.speckle_server_url}/projects/{automate_context.automation_run_data.project_id}/models/{automate_context.automation_run_data.model_id},{br_id}"
         # https://latest.speckle.systems/
+
+        path = createImageFromBbox(lat, lon, function_inputs.radius_in_meters)
+        print(path)
+        automate_context.store_file_result(path)
 
         automate_context.mark_run_success("Created 3D context")
     except Exception as ex:
