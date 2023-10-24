@@ -34,17 +34,17 @@ def createImageFromBbox(lat: float, lon: float, radius: float) -> str:
     return file_name
 
 
-def writePng(color_tuples: list[list[tuple]], path: str, x_px, y_px):
+def writePng(color_rows: list[list], path: str, x_px, y_px):
     """Writes PNG file from rows with color tuples."""
     if not path.endswith(".png"):
         return
-    color_list = []
-    for row in color_tuples:
-        colors_row = []
-        for item in row:
-            colors_row.extend([item[0], item[1], item[2]])
-        color_list.append(tuple(colors_row))
-    p = color_list
+    # color_list = []
+    # for row in color_tuples:
+    #    colors_row = []
+    #    for item in row:
+    #        colors_row.extend([item[0], item[1], item[2]])
+    #    color_list.append(tuple(colors_row))
+    p = color_rows
     f = open(path, "wb")
     w = png.Writer(x_px, y_px, greyscale=False)
     w.write(f, p)
@@ -62,8 +62,8 @@ def get_colors_of_points_from_tiles(
     """Retrieves colors from OSM tiles from bbox and writes to PNG file 256x256 px."""
     # set the map zoom level and get coefficients for retrieving tile indices
     zoom = 18
-    lon_extent_degrees = 180
-    lat_extent_degrees = 85.0511
+    # lon_extent_degrees = 180
+    # lat_extent_degrees = 85.0511
 
     # initialize rows of colors
     range_lon = [
@@ -74,7 +74,7 @@ def get_colors_of_points_from_tiles(
         min_lat_lon[0] + (max_lat_lon[0] - min_lat_lon[0]) * step / y_px
         for step in range(y_px)
     ]
-    color_rows: list[list[tuple]] = [list(range(x_px)) for _ in range(y_px)]
+    color_rows: list[list] = [[] for _ in range(y_px)]
 
     # degrees_in_tile_x = 2 * lon_extent_degrees / math.pow(2, zoom)
     # degrees_in_tile_y = 1 * lat_extent_degrees / math.pow(2, zoom)  # if zoom==5: 2.65
@@ -166,7 +166,7 @@ def get_colors_of_points_from_tiles(
             #    + (average_color_tuple[1] << 8)
             #    + average_color_tuple[2]
             # )
-            color_rows[range_lat - i - 1][k] = average_color_tuple
+            color_rows[range_lat - i - 1].extend(average_color_tuple)
 
     # shutil.rmtree(temp_folder_path)
     return color_rows
