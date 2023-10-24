@@ -1,6 +1,6 @@
 
 from copy import copy
-from typing import list
+
 import numpy as np
 from specklepy.objects.geometry import Point
 
