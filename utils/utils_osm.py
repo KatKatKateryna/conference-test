@@ -14,7 +14,7 @@ from shapely import (
     BufferJoinStyle,
     LineString,
     Point,
-    Polygon,list
+    Polygon,
     buffer,
     offset_curve,
     to_geojson,
