@@ -118,14 +118,14 @@ def automate_function(
         automate_context._automation_result.result_view = f"{automate_context.automation_run_data.speckle_server_url}/projects/{automate_context.automation_run_data.project_id}/models/{automate_context.automation_run_data.model_id},{br_id}"
         # https://latest.speckle.systems/
 
-        try:
-            path = createImageFromBbox(lat, lon, function_inputs.radius_in_meters)
-            automate_context.store_file_result(path)
-        except Exception as e:
-            automate_context.attach_error_to_objects(
-                "Warning", new_obj_id, f"OSM tiles could not be accessed: {e}"
-            )
-            automate_context.attach_error_to_objects("Warn", new_obj_id, "Fake error")
+        # try:
+        path = createImageFromBbox(lat, lon, function_inputs.radius_in_meters)
+        automate_context.store_file_result(path)
+        # except Exception as e:
+        #    automate_context.attach_error_to_objects(
+        #        "Warning", new_obj_id, f"OSM tiles could not be accessed: {e}"
+        #    )
+        #    automate_context.attach_error_to_objects("Warn", new_obj_id, "Fake error")
         automate_context.mark_run_success("Created 3D context")
     except Exception as ex:
         automate_context.mark_run_failed(f"Failed to create 3d context cause: {ex}")
