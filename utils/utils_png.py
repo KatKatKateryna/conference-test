@@ -17,7 +17,7 @@ def createImageFromBbox(
 ) -> str:
     """Get OSM tile image around location and save to PNG file, returns file path."""
     temp_folder = "automate_tiles" + str(datetime.now().timestamp())[:4]
-    temp_folder_path = os.path.join(tempfile.gettempdir(), temp_folder)
+    temp_folder_path = os.path.join(os.path.abspath(tempfile.gettempdir()), temp_folder)
     folderExist = os.path.exists(temp_folder_path)
     if not folderExist:
         os.makedirs(temp_folder_path)
