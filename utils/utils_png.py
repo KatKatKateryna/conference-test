@@ -14,7 +14,7 @@ from utils.utils_other import getDegreesBboxFromLocationAndRadius
 
 def createImageFromBbox(lat: float, lon: float, radius: float) -> str:
     """Get OSM tile image around location and save to PNG file, returns file path."""
-    temp_folder = "automate_tiles_" + str(datetime.now().timestamp())[:5]
+    temp_folder = "automate_tiles_" + str(datetime.now().timestamp())[:6]
     temp_folder_path = os.path.join(os.path.abspath(tempfile.gettempdir()), temp_folder)
     folderExist = os.path.exists(temp_folder_path)
     if not folderExist:
@@ -24,7 +24,7 @@ def createImageFromBbox(lat: float, lon: float, radius: float) -> str:
 
     x_px = min(2048, int(5 * radius))
     y_px = min(2048, int(5 * radius))
-    png_name = f"map_{int(lat*10000)}_{int(lon*10000)}_{radius}.png"
+    png_name = f"map_{int(lat*1000000)}_{int(lon*1000000)}_{radius}.png"
     color_rows = get_colors_of_points_from_tiles(
         min_lat_lon, max_lat_lon, temp_folder_path, png_name, x_px, y_px
     )
