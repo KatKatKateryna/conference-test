@@ -125,7 +125,7 @@ def automate_function(
             automate_context.attach_error_to_objects(
                 "Warning", new_obj_id, f"OSM tiles could not be accessed: {e}"
             )
-
+            automate_context.attach_error_to_objects("Warn", new_obj_id, "Fake error")
         automate_context.mark_run_success("Created 3D context")
     except Exception as ex:
         automate_context.mark_run_failed(f"Failed to create 3d context cause: {ex}")
