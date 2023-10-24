@@ -166,7 +166,7 @@ def get_colors_of_points_from_tiles(
             #    + (average_color_tuple[1] << 8)
             #    + average_color_tuple[2]
             # )
-            color_rows[i][k] = average_color_tuple
+            color_rows[range_lat - i - 1][k] = average_color_tuple
 
     # shutil.rmtree(temp_folder_path)
     return color_rows
