@@ -28,7 +28,6 @@ class FunctionInputs(AutomateBase):
     """
 
     radius_in_meters: float = Field(
-        default=200,
         title="Radius in meters",
         description=(
             "Radius from the Model location," " derived from Revit model lat, lon."
