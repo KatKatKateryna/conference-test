@@ -23,25 +23,27 @@ from specklepy.objects import Base
 from specklepy.objects.geometry import Line, Mesh, Point, Polyline
 
 # from utils.utils_network import colorSegments
-from utils.utils_other import COLOR_BLD, COLOR_ROAD, cleanString, fillList
+from utils.utils_other import (
+    COLOR_BLD,
+    COLOR_ROAD,
+    cleanString,
+    fillList,
+    getDegreesBboxFromLocationAndRadius,
+)
 from utils.utils_pyproj import createCRS, reprojectToCrs
 
 
-def getBuildings(lat: float, lon: float, r: float):
+def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
     """Get a list of 3d meshes by location lat&lon (in degrees) and radius (in meters)."""
     # https://towardsdatascience.com/loading-data-from-openstreetmap-with-python-and-the-overpass-api-513882a27fd0
 
-    projectedCrs = createCRS(lat, lon)
-    lonPlus1, latPlus1 = reprojectToCrs(1, 1, projectedCrs, "EPSG:4326")
-    scaleX = lonPlus1 - lon
-    scaleY = latPlus1 - lat
-    # r = RADIUS #meters
+    min_lat_lon, max_lat_lon = getDegreesBboxFromLocationAndRadius(lat, lon, r)
 
     overpass_url = "http://overpass-api.de/api/interpreter"
     overpass_query = f"""[out:json];
-    (node["building"]({lat-r*scaleY},{lon-r*scaleX},{lat+r*scaleY},{lon+r*scaleX});
-    way["building"]({lat-r*scaleY},{lon-r*scaleX},{lat+r*scaleY},{lon+r*scaleX});
-    relation["building"]({lat-r*scaleY},{lon-r*scaleX},{lat+r*scaleY},{lon+r*scaleX});
+    (node["building"]({min_lat_lon[0]},{min_lat_lon[1]},{max_lat_lon[0]},{max_lat_lon[1]});
+    way["building"]({min_lat_lon[0]},{min_lat_lon[1]},{max_lat_lon[0]},{max_lat_lon[1]});
+    relation["building"]({min_lat_lon[0]},{min_lat_lon[1]},{max_lat_lon[0]},{max_lat_lon[1]});
     );out body;>;out skel qt;"""
 
     response = requests.get(overpass_url, params={"data": overpass_query})
@@ -50,10 +52,9 @@ def getBuildings(lat: float, lon: float, r: float):
 
     ways = []
     tags = []
-
     rel_outer_ways = []
+    rel_inner_ways = []
     rel_outer_ways_tags = []
-
     ways_part = []
     nodes = []
 
@@ -96,6 +97,7 @@ def getBuildings(lat: float, lon: float, r: float):
         # relations
         elif feature["type"] == "relation":
             outer_ways = []
+            inner_ways = []
             try:
                 outer_ways_tags = {
                     "building": feature["tags"]["building"],
@@ -123,8 +125,15 @@ def getBuildings(lat: float, lon: float, r: float):
                     and feature["members"][n]["role"] == "outer"
                 ):
                     outer_ways.append({"ref": feature["members"][n]["ref"]})
+                elif (
+                    feature["members"][n]["type"] == "way"
+                    and feature["members"][n]["role"] == "inner"
+                ):
+                    inner_ways.append({"ref": feature["members"][n]["ref"]})
+
             rel_outer_ways.append(outer_ways)
             rel_outer_ways_tags.append(outer_ways_tags)
+            rel_inner_ways.append(inner_ways)
 
         # get nodes (that don't have tags)
         elif feature["type"] == "node":
@@ -139,6 +148,7 @@ def getBuildings(lat: float, lon: float, r: float):
     for n, x in enumerate(rel_outer_ways):
         # there will be a list of "ways" in each of rel_outer_ways
         full_node_list = []
+        full_node_inner_list = []
         for m, y in enumerate(rel_outer_ways[n]):
             # find ways_parts with corresponding ID
             for k, z in enumerate(ways_part):
@@ -149,7 +159,13 @@ def getBuildings(lat: float, lon: float, r: float):
                     ways_part.pop(k)  # remove used ways_parts
                     k -= 1  # reset index
                     break
-        ways.append({"nodes": full_node_list})
+                elif rel_inner_ways[n][m]["ref"] == ways_part[k]["id"]:
+                    full_node_inner_list += ways_part[k]["nodes"]
+                    ways_part.pop(k)  # remove used ways_parts
+                    k -= 1  # reset index
+                    break
+
+        ways.append({"nodes": full_node_list, "inner_nodes": full_node_inner_list})
         try:
             tags.append(
                 {
@@ -176,14 +192,14 @@ def getBuildings(lat: float, lon: float, r: float):
                 except:
                     tags.append({"building": rel_outer_ways_tags[n]["building"]})
 
-        buildingsCount = len(ways)
-        # print(buildingsCount)
+    projectedCrs = createCRS(lat, lon)
 
     # get coords of Ways
     objectGroup = []
-    for i, x in enumerate(ways):  # go through each Way: 2384
-        ids = ways[i]["nodes"]
+    for i, x in enumerate(ways):
+        ids = ways[i]
         coords = []  # replace node IDs with actual coords for each Way
+        coords_inner = []
         height = 3
         tags[i]["building"]: height = 9
         try:
@@ -205,25 +221,40 @@ def getBuildings(lat: float, lon: float, r: float):
                 except:
                     pass
 
-        for k, y in enumerate(ids):  # go through each node of the Way
-            if k == len(ids) - 1:
+        # go through each external node of the Way
+        for k, y in enumerate(ids["nodes"]):
+            if k == len(ids["nodes"]) - 1:
                 continue  # ignore last
             for n, z in enumerate(nodes):  # go though all nodes
-                if ids[k] == nodes[n]["id"]:
+                if ids["nodes"][k] == nodes[n]["id"]:
                     x, y = reprojectToCrs(
                         nodes[n]["lat"], nodes[n]["lon"], "EPSG:4326", projectedCrs
                     )
                     coords.append({"x": x, "y": y})
                     break
 
-        obj = extrudeBuildings(coords, height)
+        # go through each internal node of the Way
+        for k, y in enumerate(ids["inner_nodes"]):
+            if k == len(ids["inner_nodes"]) - 1:
+                continue  # ignore last
+            for n, z in enumerate(nodes):  # go though all nodes
+                if ids["inner_nodes"][k] == nodes[n]["id"]:
+                    x, y = reprojectToCrs(
+                        nodes[n]["lat"], nodes[n]["lon"], "EPSG:4326", projectedCrs
+                    )
+                    coords_inner.append({"x": x, "y": y})
+                    break
+
+        obj = extrudeBuildings(coords, coords_inner, height)
         objectGroup.append(obj)
         coords = None
         height = None
     return objectGroup
 
 
-def extrudeBuildings(coords: list[dict], height: float) -> Mesh:
+def extrudeBuildings(
+    coords: list[dict], coords_inner: list[dict], height: float
+) -> Mesh:
     vertices = []
     faces = []
     colors = []
