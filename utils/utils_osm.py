@@ -21,6 +21,7 @@ from shapely import (
 )
 from specklepy.objects import Base
 from specklepy.objects.geometry import Line, Mesh, Point, Polyline
+from utils.utils_geometry import create_side_face, fix_orientation, to_triangles
 
 # from utils.utils_network import colorSegments
 from utils.utils_other import (
@@ -245,121 +246,139 @@ def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
                     coords_inner.append({"x": x, "y": y})
                     break
 
-        obj = extrudeBuildings(coords, coords_inner, height)
+        obj = extrudeBuilding(coords, coords_inner, height)
         objectGroup.append(obj)
         coords = None
         height = None
     return objectGroup
 
 
-def extrudeBuildings(
+def extrudeBuilding(
     coords: list[dict], coords_inner: list[dict], height: float
 ) -> Mesh:
+    """Creating 3d Speckle Mesh from the lists of outer and inner coords and height."""
     vertices = []
     faces = []
     colors = []
 
     color = COLOR_BLD  # (255<<24) + (100<<16) + (100<<8) + 100 # argb
 
-    # bottom
-    reversed_vert_indices = list(
-        range(int(len(vertices) / 3), int(len(vertices) / 3) + len(coords))
-    )
-    for c in coords:
-        vertices.extend([c["x"], c["y"], 0])
-        colors.append(color)
-
-    polyBorder = [
-        (vertices[ind * 3], vertices[ind * 3 + 1], vertices[ind * 3 + 2])
-        for ind in reversed_vert_indices
-    ]
-    reversed_vert_indices, inverse = fix_orientation(polyBorder, reversed_vert_indices)
-    faces.extend([len(coords)] + reversed_vert_indices)
-
-    # top
-    reversed_vert_indices = list(
-        range(int(len(vertices) / 3), int(len(vertices) / 3) + len(coords))
-    )
-    for c in coords:
-        vertices.extend([c["x"], c["y"], height])
-        colors.append(color)
-
-    polyBorder = [
-        (vertices[ind * 3], vertices[ind * 3 + 1], vertices[ind * 3 + 2])
-        for ind in reversed_vert_indices
-    ]
-    reversed_vert_indices, inverse = fix_orientation(polyBorder, reversed_vert_indices)
-    reversed_vert_indices.reverse()
-    faces.extend([len(coords)] + reversed_vert_indices)
-
-    # sides
-    for i, c in enumerate(coords):
-        if i != len(coords) - 1:
-            nextC = coords[i + 1]  # i+1
-        else:
-            nextC = coords[0]  # 0
-
-        reversed_vert_indices = list(
-            range(int(len(vertices) / 3), int(len(vertices) / 3) + 4)
+    # if the building has single outline
+    if len(coords_inner) == 0:
+        # bottom
+        bottom_vert_indices = list(range(len(coords)))
+        for c in coords:
+            vertices.extend([c["x"], c["y"], 0])
+            colors.append(color)
+        bottom_vertices = [
+            (vertices[ind * 3], vertices[ind * 3 + 1], vertices[ind * 3 + 2])
+            for ind in bottom_vert_indices
+        ]
+        bottom_vert_indices, clockwise_orientation = fix_orientation(
+            bottom_vertices, bottom_vert_indices
         )
-        faces.extend([4] + reversed_vert_indices)
-        if inverse is False:
-            vertices.extend(
-                [
-                    c["x"],
-                    c["y"],
-                    0,
-                    c["x"],
-                    c["y"],
-                    height,
-                    nextC["x"],
-                    nextC["y"],
-                    height,
-                    nextC["x"],
-                    nextC["y"],
-                    0,
-                ]
-            )
-        else:
-            vertices.extend(
-                [
-                    c["x"],
-                    c["y"],
-                    0,
-                    nextC["x"],
-                    nextC["y"],
-                    0,
-                    nextC["x"],
-                    nextC["y"],
-                    height,
-                    c["x"],
-                    c["y"],
-                    height,
-                ]
-            )
-        colors.extend([color, color, color, color])
+        faces.extend([len(coords)] + bottom_vert_indices)
+
+        # top
+        top_vert_indices = list(range(len(coords), 2 * len(coords)))
+        for c in coords:
+            vertices.extend([c["x"], c["y"], height])
+            colors.append(color)
+
+        if clockwise_orientation is True:
+            top_vert_indices.reverse()
+        faces.extend([len(coords)] + top_vert_indices)
+
+        # sides
+        for i, c in enumerate(coords):
+            if i != len(coords) - 1:
+                next_coord_index = coords[i + 1]
+            else:
+                next_coord_index = coords[0]  # 0
+
+            side_vert_indices = list(range(2 * len(coords), 2 * len(coords) + 4))
+            faces.extend([4] + side_vert_indices)
+            side_vertices = create_side_face(coords, i, next_coord_index, height)
+            if clockwise_orientation is True:
+                side_vertices.reverse()
+
+            vertices.extend(side_vertices)
+            colors.extend([color, color, color, color])
+
+    else:  # if outline contains holes and mesh needs to be constructed
+        # bottom
+        try:
+            triangulated_geom, _ = to_triangles(coords, coords_inner, 0)
+            pt_list = [[p[0], p[1], 0] for p in triangulated_geom["vertices"]]
+            triangle_list = [trg for trg in triangulated_geom["triangles"]]
+
+            for trg in triangle_list:
+                a = trg[0]
+                b = trg[1]
+                c = trg[2]
+                vertices.extend(pt_list[a] + pt_list[b] + pt_list[c])
+                total_vertices += 3
+                # all faces are counter-clockwise now
+                if height is None:
+                    faces.extend([3, total_vertices-3, total_vertices-2, total_vertices-1])
+                else: # if extruding
+                    faces.extend([3, total_vertices-1, total_vertices-2, total_vertices-3]) # reverse to clock-wise (facing down)
+                
+            ran = range(0, total_vertices)
+            # a cap ##################################
+            if height is not None:
+
+
+
+
+
+
+        except Exception as e:
+            print(e)
+            return None, None
+
+        bottom_vert_indices = list(range(len(coords)))
+        for c in coords:
+            vertices.extend([c["x"], c["y"], 0])
+            colors.append(color)
+        bottom_vertices = [
+            (vertices[ind * 3], vertices[ind * 3 + 1], vertices[ind * 3 + 2])
+            for ind in bottom_vert_indices
+        ]
+        bottom_vert_indices, clockwise_orientation = fix_orientation(
+            bottom_vertices, bottom_vert_indices
+        )
+        faces.extend([len(coords)] + bottom_vert_indices)
+
+        # top
+        top_vert_indices = list(range(len(coords), 2 * len(coords)))
+        for c in coords:
+            vertices.extend([c["x"], c["y"], height])
+            colors.append(color)
+
+        if clockwise_orientation is True:
+            top_vert_indices.reverse()
+        faces.extend([len(coords)] + top_vert_indices)
+
+        # sides
+        for i, c in enumerate(coords):
+            if i != len(coords) - 1:
+                next_coord_index = coords[i + 1]
+            else:
+                next_coord_index = coords[0]  # 0
+
+            side_vert_indices = list(range(2 * len(coords), 2 * len(coords) + 4))
+            faces.extend([4] + side_vert_indices)
+            side_vertices = create_side_face(coords, i, next_coord_index, height)
+            if clockwise_orientation is True:
+                side_vertices.reverse()
+
+            vertices.extend(side_vertices)
+            colors.extend([color, color, color, color])
 
     obj = Mesh.create(faces=faces, vertices=vertices, colors=colors)
     obj.units = "m"
     return obj
-
-
-def fix_orientation(polyBorder, reversed_vert_indices, positive=True, coef=1):
-    sum_orientation = 0
-    for k, ptt in enumerate(polyBorder):  # pointTupleList:
-        index = k + 1
-        if k == len(polyBorder) - 1:
-            index = 0
-        pt = polyBorder[k * coef]
-        pt2 = polyBorder[index * coef]
-
-        sum_orientation += (pt2[0] - pt[0]) * (pt2[1] + pt[1])
-
-    inverse = False
-    if sum_orientation < 0:
-        reversed_vert_indices.reverse()
-        inverse = True
-    return reversed_vert_indices, inverse
 
 
 def getRoads(lat: float, lon: float, r: float):
