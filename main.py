@@ -51,8 +51,9 @@ def automate_function(
     # the context provides a conveniet way, to receive the triggering version
     try:
         base = automate_context.receive_version()
+        data = automate_context.automation_run_data
 
-        project_id = automate_context.automation_run_data.project_id
+        project_id = data.project_id
         projInfo = base[
             "info"
         ]  # [o for o in objects if o.speckle_type.endswith("Revit.ProjectInfo")][0]
@@ -66,7 +67,6 @@ def automate_function(
         except:  # noqa: E722
             pass
 
-        crsObj = None
         commitObj = Collection(
             elements=[], units="m", name="Context", collectionType="BuildingsLayer"
         )
@@ -102,30 +102,17 @@ def automate_function(
             )
         else:
             br_id = existing_branch.id
-        # commitObj.elements.append(base)
-
-        print(f"Branch_id={br_id}")
-        # print(f"CommitObj={commitObj}")
 
         automate_context.create_new_version_in_project(
             commitObj, br_id, "Context from Automate"
         )
-        new_obj_id = automate_context._automation_result.result_versions[
-            len(automate_context._automation_result.result_versions) - 1
-        ]
-        print(f"Created id={new_obj_id}")
-        # automate_context.compose_result_view()
-        automate_context._automation_result.result_view = f"{automate_context.automation_run_data.speckle_server_url}/projects/{automate_context.automation_run_data.project_id}/models/{automate_context.automation_run_data.model_id},{br_id}"
-        # https://latest.speckle.systems/
 
-        # try:
+        automate_context._automation_result.result_view = f"{data.speckle_server_url}/projects/{data.project_id}/models/{data.model_id},{br_id}"
+
+        # create and add basemape png file
         path = createImageFromBbox(lat, lon, function_inputs.radius_in_meters)
         automate_context.store_file_result(path)
-        # except Exception as e:
-        #    automate_context.attach_error_to_objects(
-        #        "Warning", new_obj_id, f"OSM tiles could not be accessed: {e}"
-        #    )
-        #    automate_context.attach_error_to_objects("Warn", new_obj_id, "Fake error")
+
         automate_context.mark_run_success("Created 3D context")
     except Exception as ex:
         automate_context.mark_run_failed(f"Failed to create 3d context cause: {ex}")
