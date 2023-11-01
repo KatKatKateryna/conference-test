@@ -96,7 +96,7 @@ def automate_function(
             commitObj, RESULT_BRANCH, "Context from Automate"
         )
 
-        automate_context._automation_result.result_view = f"{data.speckle_server_url}/projects/{data.project_id}/models/{data.model_id},{br_id}"
+        # automate_context._automation_result.result_view = f"{data.speckle_server_url}/projects/{data.project_id}/models/{data.model_id},{br_id}"
 
         # create and add basemape png file
         path = createImageFromBbox(lat, lon, function_inputs.radius_in_meters)
