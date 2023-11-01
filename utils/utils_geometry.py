@@ -5,40 +5,59 @@ from shapely.geometry import Polygon
 from shapely.ops import triangulate
 
 
-def fix_orientation(polyBorder, reversed_vert_indices, positive=True, coef=1):
+def fix_orientation(point_tuple_list, vert_indices, positive=True, coef=1):
     sum_orientation = 0
-    for k, ptt in enumerate(polyBorder):  # pointTupleList:
+    for k, ptt in enumerate(point_tuple_list):  # pointTupleList:
         index = k + 1
-        if k == len(polyBorder) - 1:
+        if k == len(point_tuple_list) - 1:
             index = 0
-        pt = polyBorder[k * coef]
-        pt2 = polyBorder[index * coef]
+        pt = point_tuple_list[k * coef]
+        pt2 = point_tuple_list[index * coef]
 
         sum_orientation += (pt2[0] - pt[0]) * (pt2[1] + pt[1])
 
-    clockwise_orientation = True
+    clockwise_orientation = True  # facing down originally
     if sum_orientation < 0:
-        reversed_vert_indices.reverse()
-        clockwise_orientation = False
-    return reversed_vert_indices, clockwise_orientation
+        vert_indices.reverse()
+        clockwise_orientation = False  # facing up originally
+    return vert_indices, clockwise_orientation
 
 
-def create_side_face(coords, i, next_coord_index, height) -> list[float]:
+def create_side_face(
+    coords, i, next_coord_index, height, clockwise_orientation
+) -> list[float]:
     """Constructing a vertical Mesh face assuming counter-clockwise orientation of the base polygon."""
-    side_vertices = [
-        coords[i]["x"],
-        coords[i]["y"],
-        0,
-        next_coord_index["x"],
-        next_coord_index["y"],
-        0,
-        next_coord_index["x"],
-        next_coord_index["y"],
-        height,
-        coords[i]["x"],
-        coords[i]["y"],
-        height,
-    ]
+    if clockwise_orientation is False:
+        side_vertices = [
+            coords[i]["x"],
+            coords[i]["y"],
+            0,
+            next_coord_index["x"],
+            next_coord_index["y"],
+            0,
+            next_coord_index["x"],
+            next_coord_index["y"],
+            height,
+            coords[i]["x"],
+            coords[i]["y"],
+            height,
+        ]
+    else:
+        side_vertices = [
+            coords[i]["x"],
+            coords[i]["y"],
+            0,
+            coords[i]["x"],
+            coords[i]["y"],
+            height,
+            next_coord_index["x"],
+            next_coord_index["y"],
+            height,
+            next_coord_index["x"],
+            next_coord_index["y"],
+            0,
+        ]
+
     return side_vertices
 
 
@@ -50,6 +69,7 @@ def to_triangles(coords: list[dict], coords_inner: list[dict], attempt=0):
 
         vert = []
         vert_rounded = []
+        # round boundary precision:
         for i, v in enumerate(coords):
             if i == len(coords) - 1:
                 vert.append((v["x"], v["y"]))
@@ -135,7 +155,8 @@ def to_triangles(coords: list[dict], coords_inner: list[dict], attempt=0):
         shape = {"vertices": vertices, "triangles": triangles}
         return shape, attempt
     except Exception as e:
-        print(e)
+        # raise e
+        print(f"Meshing iteration {attempt} failed: {e}")
         attempt += 1
         if attempt <= 3:
             return to_triangles(coords, coords_inner, attempt)

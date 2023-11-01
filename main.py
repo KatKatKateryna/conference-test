@@ -162,7 +162,7 @@ def automate_function_without_inputs(automate_context: AutomationContext) -> Non
 
 
 # make sure to call the function with the executor
-if __name__ == "__main__":
+if __name__ == "__main__11":
     # NOTE: always pass in the automate function by its reference, do not invoke it!
 
     # pass in the function reference with the inputs schema to the executor
@@ -170,3 +170,42 @@ if __name__ == "__main__":
 
     # if the function has no arguments, the executor can handle it like so
     # execute_automate_function(automate_function_without_inputs)
+
+##########################################################################
+
+from specklepy.api.credentials import get_local_accounts
+from specklepy.api.operations import send
+from specklepy.transports.server import ServerTransport
+from specklepy.core.api.client import SpeckleClient
+
+lat = 51.500639115906935
+lon = -0.12688576809010643
+radius_in_meters = 300
+streamId = "8ef52c7aa7"
+
+acc = get_local_accounts()[1]
+client = SpeckleClient(acc.serverInfo.url, acc.serverInfo.url.startswith("https"))
+client.authenticate_with_account(acc)
+transport = ServerTransport(client=client, stream_id=streamId)
+
+blds = getBuildings(lat, lon, radius_in_meters)
+# print(blds)
+
+commit_obj = Collection(
+    elements=[Base(displayValue=blds)],
+    units="m",
+    name="Context",
+    collectionType="BuildingsLayer",
+)
+objId = send(base=commit_obj, transports=[transport])
+commit_id = client.commit.create(
+    stream_id=streamId,
+    object_id=objId,
+    branch_name="main",
+    message="Sent objects from Automate tests",
+    source_application="Automate tests",
+)
+
+
+path = createImageFromBbox(lat, lon, radius_in_meters)
+print(path)
