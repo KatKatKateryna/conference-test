@@ -92,19 +92,8 @@ def automate_function(
         commitObj.elements.append(roadObj)
         commitObj.elements.append(roadMeshObj)
 
-        # create branch if needed
-        existing_branch = automate_context.speckle_client.branch.get(
-            project_id, RESULT_BRANCH, 1
-        )
-        if existing_branch is None:
-            br_id = automate_context.speckle_client.branch.create(
-                stream_id=project_id, name=RESULT_BRANCH, description=""
-            )
-        else:
-            br_id = existing_branch.id
-
         automate_context.create_new_version_in_project(
-            commitObj, br_id, "Context from Automate"
+            commitObj, RESULT_BRANCH, "Context from Automate"
         )
 
         automate_context._automation_result.result_view = f"{data.speckle_server_url}/projects/{data.project_id}/models/{data.model_id},{br_id}"
