@@ -129,7 +129,7 @@ def automate_function_without_inputs(automate_context: AutomationContext) -> Non
 
 
 # make sure to call the function with the executor
-if __name__ == "__main__11":
+if __name__ == "__main__":
     # NOTE: always pass in the automate function by its reference, do not invoke it!
 
     # pass in the function reference with the inputs schema to the executor
@@ -139,7 +139,7 @@ if __name__ == "__main__11":
     # execute_automate_function(automate_function_without_inputs)
 
 ##########################################################################
-
+r"""
 from specklepy.api.credentials import get_local_accounts
 from specklepy.api.operations import send
 from specklepy.transports.server import ServerTransport
@@ -177,3 +177,4 @@ commit_id = client.commit.create(
 
 # path = createImageFromBbox(lat, lon, radius_in_meters)
 # print(path)
+"""
