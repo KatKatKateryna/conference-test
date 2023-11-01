@@ -25,6 +25,7 @@ from utils.utils_geometry import (
     create_side_face,
     extrudeBuilding,
     fix_orientation,
+    rotate_pt,
     to_triangles,
 )
 
@@ -39,7 +40,7 @@ from utils.utils_other import (
 from utils.utils_pyproj import createCRS, reprojectToCrs
 
 
-def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
+def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mesh]:
     """Get a list of 3d meshes by location lat&lon (in degrees) and radius (in meters)."""
     # https://towardsdatascience.com/loading-data-from-openstreetmap-with-python-and-the-overpass-api-513882a27fd0
 
@@ -268,7 +269,15 @@ def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
                         coords_per_void.append({"x": x, "y": y})
                         break
             coords_inner.append(coords_per_void)
-        obj = extrudeBuilding(coords, coords_inner, height)
+
+        if angle_rad == 0:
+            obj = extrudeBuilding(coords, coords_inner, height)
+        else:
+            rotated_coords = [rotate_pt(c, angle_rad) for c in coords]
+            rotated_coords_inner = [
+                [rotate_pt(c_void, angle_rad) for c_void in c] for c in coords_inner
+            ]
+            obj = extrudeBuilding(rotated_coords, rotated_coords_inner, height)
         if obj is not None:
             objectGroup.append((obj, tags[i]["building"]))
         coords = None
@@ -276,7 +285,7 @@ def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
     return objectGroup
 
 
-def getRoads(lat: float, lon: float, r: float):
+def getRoads(lat: float, lon: float, r: float, angle_rad: float):
     # https://towardsdatascience.com/loading-data-from-openstreetmap-with-python-and-the-overpass-api-513882a27fd0
 
     keyword = "highway"
@@ -419,7 +428,11 @@ def getRoads(lat: float, lon: float, r: float):
                     coords.append({"x": x, "y": y})
                     break
 
-        obj = joinRoads(coords, closed, 0)
+        if angle_rad == 0:
+            obj = joinRoads(coords, closed, 0)
+        else:
+            rotated_coords = [rotate_pt(c, angle_rad) for c in coords]
+            obj = joinRoads(rotated_coords, closed, 0)
         objectGroup.append(obj)
 
         objMesh = roadBuffer(obj, value)

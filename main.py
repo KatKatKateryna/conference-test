@@ -71,14 +71,14 @@ def automate_function(
             elements=[], units="m", name="Context", collectionType="ContextLayer"
         )
 
-        blds = getBuildings(lat, lon, function_inputs.radius_in_meters)
+        blds = getBuildings(lat, lon, function_inputs.radius_in_meters, angle_rad)
         bases = [Base(units="m", displayValue=[b], building=tag) for b, tag in blds]
         bldObj = Collection(
             elements=bases, units="m", name="Context", collectionType="BuildingsLayer"
         )
 
         roads, meshes, analysisMeshes = getRoads(
-            lat, lon, function_inputs.radius_in_meters
+            lat, lon, function_inputs.radius_in_meters, angle_rad
         )
         roadObj = Collection(
             elements=roads, units="m", name="Context", collectionType="RoadsLayer"
@@ -148,6 +148,7 @@ from specklepy.core.api.client import SpeckleClient
 lat = 51.500639115906935  # 52.52014  # 51.500639115906935
 lon = -0.12688576809010643  # 13.40371  # -0.12688576809010643
 radius_in_meters = 200
+angle_rad = 1
 streamId = "8ef52c7aa7"
 
 acc = get_local_accounts()[1]
@@ -155,7 +156,7 @@ client = SpeckleClient(acc.serverInfo.url, acc.serverInfo.url.startswith("https"
 client.authenticate_with_account(acc)
 transport = ServerTransport(client=client, stream_id=streamId)
 
-blds = getBuildings(lat, lon, radius_in_meters)
+blds = getBuildings(lat, lon, radius_in_meters, angle_rad)
 base_blds = [Base(units="m", displayValue=[b], building=tag) for b, tag in blds]
 
 commit_obj = Collection(

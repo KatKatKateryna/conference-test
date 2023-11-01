@@ -1,3 +1,4 @@
+import math
 import geopandas as gpd
 import numpy as np
 from geovoronoi import voronoi_regions_from_coords
@@ -174,8 +175,18 @@ def to_triangles(coords: list[dict], coords_inner: list[dict], attempt=0):
             return None, None
 
 
+def rotate_pt(coord: dict, angle: float) -> list[dict]:
+    """Rotate a point around (0,0,1) axis."""
+    x = coord["x"]
+    y = coord["y"]
+    x2 = x * math.cos(angle) + y * math.sin(angle)
+    y2 = -x * math.sin(angle) + y * math.cos(angle)
+
+    return {"x": x2, "y": y2}
+
+
 def extrudeBuilding(
-    coords: list[dict], coords_inner: list[dict], height: float
+    coords: list[dict], coords_inner: list[list[dict]], height: float
 ) -> Mesh:
     """Creating 3d Speckle Mesh from the lists of outer and inner coords and height."""
     vertices = []
