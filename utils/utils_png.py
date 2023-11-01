@@ -194,7 +194,7 @@ def add_scale_bar(color_rows, radius, size):
             for k, _ in enumerate(range(3 * size)):
                 # only color pixel within the scale range
                 if k >= 3 * scale_start and k < 3 * scale_end:
-                    color_rows[i][k] = color_rows[i][int(k / 3) + 2] = 0
+                    color_rows[i][k] = 0
 
     return color_rows
 
