@@ -29,6 +29,7 @@ class FunctionInputs(AutomateBase):
 
     radius_in_meters: float = Field(
         title="Radius in meters",
+        le=1000,
         description=(
             "Radius from the Model location," " derived from Revit model lat, lon."
         ),
@@ -118,7 +119,7 @@ def automate_function_without_inputs(automate_context: AutomationContext) -> Non
 
 
 # make sure to call the function with the executor
-if __name__ == "__main__":
+if __name__ == "__main__1111":
     # NOTE: always pass in the automate function by its reference, do not invoke it!
 
     # pass in the function reference with the inputs schema to the executor
@@ -128,7 +129,7 @@ if __name__ == "__main__":
     # execute_automate_function(automate_function_without_inputs)
 
 ##########################################################################
-r"""
+
 from specklepy.api.credentials import get_local_accounts
 from specklepy.api.operations import send
 from specklepy.transports.server import ServerTransport
@@ -136,10 +137,11 @@ from specklepy.core.api.client import SpeckleClient
 
 lat = 51.500639115906935  # 52.52014  # 51.500639115906935
 lon = -0.12688576809010643  # 13.40371  # -0.12688576809010643
-radius_in_meters = 200
+radius_in_meters = 100
 angle_rad = 1
 streamId = "8ef52c7aa7"
 
+r"""
 acc = get_local_accounts()[1]
 client = SpeckleClient(acc.serverInfo.url, acc.serverInfo.url.startswith("https"))
 client.authenticate_with_account(acc)
@@ -162,8 +164,7 @@ commit_id = client.commit.create(
     message="Sent objects from Automate tests",
     source_application="Automate tests",
 )
-
-
-# path = createImageFromBbox(lat, lon, radius_in_meters)
-# print(path)
 """
+
+path = createImageFromBbox(lat, lon, radius_in_meters)
+print(path)

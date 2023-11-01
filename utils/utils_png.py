@@ -25,7 +25,7 @@ def createImageFromBbox(lat: float, lon: float, radius: float) -> str:
     y_px = min(2048, int(5 * radius))
     png_name = f"map_{int(lat*1000000)}_{int(lon*1000000)}_{radius}.png"
     color_rows = get_colors_of_points_from_tiles(
-        min_lat_lon, max_lat_lon, temp_folder_path, png_name, x_px, y_px
+        min_lat_lon, max_lat_lon, radius, temp_folder_path, png_name, x_px, y_px
     )
 
     file_name = os.path.join(temp_folder_path, png_name)
@@ -48,6 +48,7 @@ def writePng(color_rows: list[list], path: str, x_px, y_px):
 def get_colors_of_points_from_tiles(
     min_lat_lon: tuple,
     max_lat_lon: tuple,
+    radius: float,
     temp_folder_path: str,
     png_name: str,
     x_px: int = 256,
@@ -56,6 +57,15 @@ def get_colors_of_points_from_tiles(
     """Retrieves colors from OSM tiles from bbox and writes to PNG file 256x256 px."""
     # set the map zoom level
     zoom = 18
+    zoom_max_range = 0.014
+    diff_lat = max_lat_lon[0] - min_lat_lon[0]  # 0.008988129231113362 # for 500m r
+    diff_lon = max_lat_lon[1] - min_lat_lon[1]  # 0.014401018774201635 # for 500m r
+
+    if diff_lat > zoom_max_range or diff_lon > zoom_max_range:
+        zoom_step = 1
+        if diff_lat / zoom_max_range >= 2 or diff_lon / zoom_max_range >= 2:
+            zoom_step = 2
+        zoom -= zoom_step
 
     # initialize rows of colors
     range_lon = [
@@ -78,12 +88,13 @@ def get_colors_of_points_from_tiles(
             y_r = math.radians(lat)
             y = n * (1 - (math.log(math.tan(y_r) + 1 / math.cos(y_r)) / math.pi)) / 2
 
-            # download a tile if doesn't exist yet
+            # check if the previous iterations saved this tile
             file_name = f"{zoom}_{int(x)}_{int(y)}"
-            # print(file_name)
             if file_name not in all_tile_names:
+                # if not, check whether the file with this name exists
                 file_path = os.path.join(temp_folder_path, f"{file_name}.png")
                 fileExists = os.path.isfile(file_path)
+                # download a tile if doesn't exist yet
                 if not fileExists:
                     url = f"https://tile.openstreetmap.org/{zoom}/{int(x)}/{int(y)}.png"  #'https://tile.openstreetmap.org/3/4/2.png'
                     headers = {"User-Agent": f"App: {png_name}"}
@@ -148,6 +159,42 @@ def get_colors_of_points_from_tiles(
             )
 
             color_rows[len(range_lat) - i - 1].extend(average_color_tuple)
+
+    color_rows = add_scale_bar(color_rows, radius, x_px)
+
+    return color_rows
+
+
+def add_scale_bar(color_rows, radius, size):
+    """Add a scale bar."""
+    margin_coeff = 100
+    pixels_per_meter = size / 2 / radius
+
+    scale_meters = math.floor(radius / 100) * 100
+    if scale_meters == 0:
+        scale_meters = math.floor(radius / 10) * 10
+        if scale_meters == 0:
+            scale_meters = 1
+    print(radius)
+    print(scale_meters)
+    print(size)
+    print(pixels_per_meter)
+    print("___")
+
+    scale_start = size - size / margin_coeff - (scale_meters * pixels_per_meter)
+    scale_end = size - size / margin_coeff
+    print(3 * scale_start)
+    print(3 * scale_end)
+    # print(len(color_rows[0]))
+    for i, _ in enumerate(range(size)):
+        # stop at the necessary row
+        count = 0
+        if i >= (size - size / margin_coeff) and count <= 2 and i < size - 2:
+            count += 1
+            for k, _ in enumerate(range(3 * size)):
+                # only color pixel within the scale range
+                if k >= 3 * scale_start and k < 3 * scale_end:
+                    color_rows[i][k] = color_rows[i][int(k / 3) + 2] = 0
 
     return color_rows
 
