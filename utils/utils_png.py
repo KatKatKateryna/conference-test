@@ -97,7 +97,7 @@ def get_colors_of_points_from_tiles(
                 # download a tile if doesn't exist yet
                 if not fileExists:
                     url = f"https://tile.openstreetmap.org/{zoom}/{int(x)}/{int(y)}.png"  #'https://tile.openstreetmap.org/3/4/2.png'
-                    headers = {"User-Agent": f"App: {png_name}"}
+                    headers = {"User-Agent": f"Speckle-Automate; Image: {png_name}"}
                     r = requests.get(url, headers=headers, stream=True)
                     if r.status_code == 200:
                         with open(file_path, "wb") as f:
@@ -167,34 +167,30 @@ def get_colors_of_points_from_tiles(
 
 def add_scale_bar(color_rows, radius, size):
     """Add a scale bar."""
-    margin_coeff = 100
     pixels_per_meter = size / 2 / radius
 
-    scale_meters = math.floor(radius / 100) * 100
+    scale_meters = math.floor(radius / 200) * 100
     if scale_meters == 0:
-        scale_meters = math.floor(radius / 10) * 10
+        scale_meters = math.floor(radius / 20) * 10
         if scale_meters == 0:
             scale_meters = 1
     print(radius)
     print(scale_meters)
     print(size)
     print(pixels_per_meter)
-    print("___")
 
+    margin_coeff = 100
+    line_width = 2
     scale_start = size - size / margin_coeff - (scale_meters * pixels_per_meter)
     scale_end = size - size / margin_coeff
-    print(3 * scale_start)
-    print(3 * scale_end)
 
-    line_width = 2
-    # print(len(color_rows[0]))
     for i, _ in enumerate(range(size)):
         # stop at the necessary row for ticks
         count = 0
         if (
-            i >= (size - size / margin_coeff) - line_width
+            i >= (size - size / margin_coeff) - 5 * line_width
             and count <= line_width
-            and i < size - 2 * line_width
+            and i < size - size / margin_coeff - line_width
         ):
             count += 1
             for k, _ in enumerate(range(3 * size)):
@@ -209,9 +205,9 @@ def add_scale_bar(color_rows, radius, size):
         # stop at the necessary row for the strip
         count = 0
         if (
-            i >= (size - size / margin_coeff)
+            i >= (size - size / margin_coeff) - line_width
             and count <= line_width
-            and i < size - line_width
+            and i < size - size / margin_coeff
         ):
             count += 1
             for k, _ in enumerate(range(3 * size)):

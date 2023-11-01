@@ -29,6 +29,7 @@ class FunctionInputs(AutomateBase):
 
     radius_in_meters: float = Field(
         title="Radius in meters",
+        ge=20,
         le=1000,
         description=(
             "Radius from the Model location," " derived from Revit model lat, lon."
@@ -69,23 +70,52 @@ def automate_function(
             pass
 
         commitObj = Collection(
-            elements=[], units="m", name="Context", collectionType="ContextLayer"
+            elements=[],
+            units="m",
+            name="Context",
+            collectionType="ContextLayer",
+            source_data="© OpenStreetMap",
+            source_url="https://www.openstreetmap.org/",
         )
 
         blds = getBuildings(lat, lon, function_inputs.radius_in_meters, angle_rad)
-        bases = [Base(units="m", displayValue=[b], building=tag) for b, tag in blds]
+        bases = [
+            Base(
+                units="m",
+                displayValue=[b],
+                building=tag,
+                source_data="© OpenStreetMap",
+                source_url="https://www.openstreetmap.org/",
+            )
+            for b, tag in blds
+        ]
         bldObj = Collection(
-            elements=bases, units="m", name="Context", collectionType="BuildingsLayer"
+            elements=bases,
+            units="m",
+            name="Context",
+            collectionType="BuildingsLayer",
+            source_data="© OpenStreetMap",
+            source_url="https://www.openstreetmap.org/",
         )
 
         roads, meshes, analysisMeshes = getRoads(
             lat, lon, function_inputs.radius_in_meters, angle_rad
         )
         roadObj = Collection(
-            elements=roads, units="m", name="Context", collectionType="RoadsLayer"
+            elements=roads,
+            units="m",
+            name="Context",
+            collectionType="RoadsLayer",
+            source_data="© OpenStreetMap",
+            source_url="https://www.openstreetmap.org/",
         )
         roadMeshObj = Collection(
-            elements=meshes, units="m", name="Context", collectionType="RoadMeshesLayer"
+            elements=meshes,
+            units="m",
+            name="Context",
+            collectionType="RoadMeshesLayer",
+            source_data="© OpenStreetMap",
+            source_url="https://www.openstreetmap.org/",
         )
 
         # add objects to new Collection

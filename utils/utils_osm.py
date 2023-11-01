@@ -506,7 +506,7 @@ def lineColorBuffer(poly: Line, maxCount: float, value: float):
     return Base(units="m", displayValue=[mesh], width=2 * value)
 
 
-def roadBuffer(poly: Polyline, value: float):
+def roadBuffer(poly: Polyline, value: float) -> Base:
     if value is None:
         return
     line = LineString([(p.x, p.y) for p in poly.as_points()])
@@ -533,7 +533,13 @@ def roadBuffer(poly: Polyline, value: float):
     )
     mesh.units = "m"
 
-    return Base(units="m", displayValue=[mesh], width=2 * value)
+    return Base(
+        units="m",
+        displayValue=[mesh],
+        width=2 * value,
+        source_data="© OpenStreetMap",
+        source_url="https://www.openstreetmap.org/",
+    )
 
 
 def splitWaysByIntersection(ways: list, tags: list):
