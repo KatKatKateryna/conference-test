@@ -185,22 +185,34 @@ def add_scale_bar(color_rows, radius, size):
     scale_end = size - size / margin_coeff
     print(3 * scale_start)
     print(3 * scale_end)
+
+    line_width = 2
     # print(len(color_rows[0]))
     for i, _ in enumerate(range(size)):
         # stop at the necessary row for ticks
         count = 0
-        if i >= (size - size / margin_coeff) - 2 and count <= 2 and i < size - 2 - 2:
+        if (
+            i >= (size - size / margin_coeff) - line_width
+            and count <= line_width
+            and i < size - 2 * line_width
+        ):
             count += 1
             for k, _ in enumerate(range(3 * size)):
                 # only color pixel within the scale range
                 if k in list(
-                    range(int(3 * scale_start), int(3 * scale_start) + 6)
-                ) or k in list(range(int(3 * scale_end - 6), int(3 * scale_end))):
+                    range(int(3 * scale_start), int(3 * scale_start) + 3 * line_width)
+                ) or k in list(
+                    range(int(3 * scale_end - 3 * line_width), int(3 * scale_end))
+                ):
                     color_rows[i][k] = 0
 
         # stop at the necessary row for the strip
         count = 0
-        if i >= (size - size / margin_coeff) and count <= 2 and i < size - 2:
+        if (
+            i >= (size - size / margin_coeff)
+            and count <= line_width
+            and i < size - line_width
+        ):
             count += 1
             for k, _ in enumerate(range(3 * size)):
                 # only color pixel within the scale range
