@@ -62,7 +62,7 @@ def automate_function(
         lat = np.rad2deg(projInfo["latitude"])
         angle_deg = 0
         try:
-            angle_rad = projInfo["locations"][0]["trueNorth"]
+            angle_rad = -1 * projInfo["locations"][0]["trueNorth"]
             angle_deg = np.rad2deg(angle_rad)
         except:  # noqa: E722
             pass
