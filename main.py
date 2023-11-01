@@ -68,11 +68,11 @@ def automate_function(
             pass
 
         commitObj = Collection(
-            elements=[], units="m", name="Context", collectionType="BuildingsLayer"
+            elements=[], units="m", name="Context", collectionType="ContextLayer"
         )
 
         blds = getBuildings(lat, lon, function_inputs.radius_in_meters)
-        bases = [Base(units="m", displayValue=[b]) for b in blds]
+        bases = [Base(units="m", displayValue=[b], building=tag) for b, tag in blds]
         bldObj = Collection(
             elements=bases, units="m", name="Context", collectionType="BuildingsLayer"
         )
@@ -117,39 +117,6 @@ def automate_function(
     except Exception as ex:
         automate_context.mark_run_failed(f"Failed to create 3d context cause: {ex}")
 
-    r"""
-    version_root_object = automate_context.receive_version()
-
-    count = 0
-    for b in flatten_base(version_root_object):
-        if b.speckle_type == function_inputs.forbidden_speckle_type:
-            if not b.id:
-                raise ValueError("Cannot operate on objects without their id's.")
-
-            automate_context.attach_error_to_objects(
-                category="Forbidden speckle_type",
-                object_ids=b.id,
-                message="This project should not contain the type: "
-                f"{b.speckle_type}",
-            )
-            count += 1
-
-    if count > 0:
-        # this is how a run is marked with a failure cause
-        automate_context.mark_run_failed(
-            "Automation failed: "
-            f"Found {count} object that have one of the forbidden speckle types: "
-            f"{function_inputs.forbidden_speckle_type}"
-        )
-
-    else:
-        automate_context.mark_run_success("No forbidden types found.")
-
-    # if the function generates file results, this is how it can be
-    # attached to the Speckle project / model
-    # automate_context.store_file_result("./report.pdf")
-    """
-
 
 def automate_function_without_inputs(automate_context: AutomationContext) -> None:
     """A function example without inputs.
@@ -178,9 +145,9 @@ from specklepy.api.operations import send
 from specklepy.transports.server import ServerTransport
 from specklepy.core.api.client import SpeckleClient
 
-lat = 51.500639115906935
-lon = -0.12688576809010643
-radius_in_meters = 300
+lat = 51.500639115906935  # 52.52014  # 51.500639115906935
+lon = -0.12688576809010643  # 13.40371  # -0.12688576809010643
+radius_in_meters = 200
 streamId = "8ef52c7aa7"
 
 acc = get_local_accounts()[1]
@@ -189,10 +156,10 @@ client.authenticate_with_account(acc)
 transport = ServerTransport(client=client, stream_id=streamId)
 
 blds = getBuildings(lat, lon, radius_in_meters)
-# print(blds)
+base_blds = [Base(units="m", displayValue=[b], building=tag) for b, tag in blds]
 
 commit_obj = Collection(
-    elements=[Base(displayValue=blds)],
+    elements=base_blds,
     units="m",
     name="Context",
     collectionType="BuildingsLayer",
@@ -207,5 +174,5 @@ commit_id = client.commit.create(
 )
 
 
-path = createImageFromBbox(lat, lon, radius_in_meters)
-print(path)
+# path = createImageFromBbox(lat, lon, radius_in_meters)
+# print(path)

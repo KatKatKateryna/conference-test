@@ -21,7 +21,12 @@ from shapely import (
 )
 from specklepy.objects import Base
 from specklepy.objects.geometry import Line, Mesh, Point, Polyline
-from utils.utils_geometry import create_side_face, fix_orientation, to_triangles
+from utils.utils_geometry import (
+    create_side_face,
+    extrudeBuilding,
+    fix_orientation,
+    to_triangles,
+)
 
 # from utils.utils_network import colorSegments
 from utils.utils_other import (
@@ -60,6 +65,7 @@ def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
     nodes = []
 
     for feature in features:
+        # print(feature)
         # ways
         if feature["type"] == "way":
             try:
@@ -124,6 +130,7 @@ def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
                     except:
                         outer_ways_tags = {"building": feature["tags"]["building"]}
 
+            inner_way_single = []
             for n, x in enumerate(feature["members"]):
                 # if several Outer ways, combine them
                 if (
@@ -136,7 +143,6 @@ def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
                     and feature["members"][n]["role"] == "inner"
                 ):
                     inner_ways.append({"ref": feature["members"][n]["ref"]})
-
             rel_outer_ways.append(outer_ways)
             rel_outer_ways_tags.append(outer_ways_tags)
             rel_inner_ways.append(inner_ways)
@@ -150,8 +156,9 @@ def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
                     {"id": feature["id"], "lat": feature["lat"], "lon": feature["lon"]}
                 )
 
+    # print(ways_part)
     # turn relations_OUTER into ways
-    for n, x in enumerate(rel_outer_ways):
+    for n, x in enumerate(rel_outer_ways):  # just 1
         # there will be a list of "ways" in each of rel_outer_ways
         full_node_list = []
         full_node_inner_list = []
@@ -165,22 +172,18 @@ def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
                     ways_part.pop(k)  # remove used ways_parts
                     k -= 1  # reset index
                     break
-
-    # turn relations_INNER into ways
-    for n, x in enumerate(rel_inner_ways):
-        # there will be a list of "ways" in each of rel_outer_ways
-        full_node_list = []
-        full_node_inner_list = []
         for m, y in enumerate(rel_inner_ways[n]):
             # find ways_parts with corresponding ID
+            local_node_list = []
             for k, z in enumerate(ways_part):
                 if k == len(ways_part):
                     break
                 if rel_inner_ways[n][m]["ref"] == ways_part[k]["id"]:
-                    full_node_list += ways_part[k]["nodes"]
+                    local_node_list += ways_part[k]["nodes"]
                     ways_part.pop(k)  # remove used ways_parts
                     k -= 1  # reset index
                     break
+            full_node_inner_list.append(local_node_list)
 
         ways.append({"nodes": full_node_list, "inner_nodes": full_node_inner_list})
         try:
@@ -209,6 +212,8 @@ def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
                 except:
                     tags.append({"building": rel_outer_ways_tags[n]["building"]})
 
+    # print(full_node_list)
+
     projectedCrs = createCRS(lat, lon)
 
     # get coords of Ways
@@ -217,8 +222,7 @@ def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
         ids = ways[i]
         coords = []  # replace node IDs with actual coords for each Way
         coords_inner = []
-        height = 3
-        tags[i]["building"]: height = 9
+        height = 9
         try:
             height = (
                 float(cleanString(tags[i]["levels"].split(",")[0].split(";")[0])) * 3
@@ -251,179 +255,25 @@ def getBuildings(lat: float, lon: float, r: float) -> list[Mesh]:
                     break
 
         # go through each internal node of the Way
-        for k, y in enumerate(ids["inner_nodes"]):
-            if k == len(ids["inner_nodes"]) - 1:
-                continue  # ignore last
-            for n, z in enumerate(nodes):  # go though all nodes
-                if ids["inner_nodes"][k] == nodes[n]["id"]:
-                    x, y = reprojectToCrs(
-                        nodes[n]["lat"], nodes[n]["lon"], "EPSG:4326", projectedCrs
-                    )
-                    coords_inner.append({"x": x, "y": y})
-                    break
-
+        for l, void_nodes in enumerate(ids["inner_nodes"]):
+            coords_per_void = []
+            for k, y in enumerate(void_nodes):
+                if k == len(ids["inner_nodes"][l]) - 1:
+                    continue  # ignore last
+                for n, z in enumerate(nodes):  # go though all nodes
+                    if ids["inner_nodes"][l][k] == nodes[n]["id"]:
+                        x, y = reprojectToCrs(
+                            nodes[n]["lat"], nodes[n]["lon"], "EPSG:4326", projectedCrs
+                        )
+                        coords_per_void.append({"x": x, "y": y})
+                        break
+            coords_inner.append(coords_per_void)
         obj = extrudeBuilding(coords, coords_inner, height)
         if obj is not None:
-            objectGroup.append(obj)
+            objectGroup.append((obj, tags[i]["building"]))
         coords = None
         height = None
     return objectGroup
-
-
-def extrudeBuilding(
-    coords: list[dict], coords_inner: list[dict], height: float
-) -> Mesh:
-    """Creating 3d Speckle Mesh from the lists of outer and inner coords and height."""
-    vertices = []
-    faces = []
-    colors = []
-
-    color = COLOR_BLD  # (255<<24) + (100<<16) + (100<<8) + 100 # argb
-
-    if len(coords) < 3:
-        return None
-    # if the building has single outline
-    if len(coords_inner) == 0:
-        # bottom
-        bottom_vert_indices = list(range(len(coords)))
-        bottom_vertices = [[c["x"], c["y"]] for c in coords]
-        bottom_vert_indices, clockwise_orientation = fix_orientation(
-            bottom_vertices, bottom_vert_indices
-        )
-        for c in coords:
-            vertices.extend([c["x"], c["y"], 0])
-            colors.append(color)
-        faces.extend([len(coords)] + bottom_vert_indices)
-
-        # top
-        top_vert_indices = list(range(len(coords), 2 * len(coords)))
-        for c in coords:
-            vertices.extend([c["x"], c["y"], height])
-            colors.append(color)
-
-        if clockwise_orientation is True:  # if facing down originally
-            top_vert_indices.reverse()
-        faces.extend([len(coords)] + top_vert_indices)
-
-        # sides
-        total_vertices = len(colors)
-        for i, c in enumerate(coords):
-            if i != len(coords) - 1:
-                next_coord_index = coords[i + 1]
-            else:
-                next_coord_index = coords[0]  # 0
-
-            side_vert_indices = list(range(total_vertices, total_vertices + 4))
-            faces.extend([4] + side_vert_indices)
-            side_vertices = create_side_face(
-                coords, i, next_coord_index, height, clockwise_orientation
-            )
-            # if clockwise_orientation is True:  # if facing down originally
-            #    side_vertices.reverse()
-
-            vertices.extend(side_vertices)
-            colors.extend([color, color, color, color])
-            total_vertices += 4
-
-    else:  # if outline contains holes and mesh needs to be constructed
-        # bottom
-        try:
-            total_vertices = 0
-            print(coords_inner)
-            triangulated_geom, _ = to_triangles(coords, coords_inner)
-        except Exception as e:
-            print(f"Mesh creation failed: {e}")
-            return extrudeBuilding(coords, [], height)
-            # raise e
-        if triangulated_geom is None:
-            return extrudeBuilding(coords, [], height, 1)
-
-        pt_list = [[p[0], p[1], 0] for p in triangulated_geom["vertices"]]
-        triangle_list = [trg for trg in triangulated_geom["triangles"]]
-
-        for trg in triangle_list:
-            a = trg[0]
-            b = trg[1]
-            c = trg[2]
-            vertices.extend(pt_list[a] + pt_list[b] + pt_list[c])
-            colors.extend(color, color, color)
-            total_vertices += 3
-
-            # all faces are counter-clockwise now (facing up)
-            # add vertices in the reverse (clock-wise) order (facing down)
-            faces.extend(
-                [3, total_vertices - 1, total_vertices - 2, total_vertices - 3]
-            )
-
-        # a cap ##################################
-
-        pt_list = [[p[0], p[1], height] for p in triangulated_geom["vertices"]]
-
-        for trg in triangle_list:
-            a = trg[0]
-            b = trg[1]
-            c = trg[2]
-            # all faces are counter-clockwise now (facing up)
-            vertices.extend(pt_list[a] + pt_list[b] + pt_list[c])
-            colors.extend(color, color, color)
-            total_vertices += 3
-            faces.extend(
-                [3, total_vertices - 3, total_vertices - 2, total_vertices - 1]
-            )
-
-        ###################################### add extrusions
-
-        # sides
-        bottom_vert_indices = list(range(len(coords)))
-        bottom_vertices = [[c["x"], c["y"]] for c in coords]
-        bottom_vert_indices, clockwise_orientation = fix_orientation(
-            bottom_vertices, bottom_vert_indices
-        )
-        for i, c in enumerate(coords):
-            if i != len(coords) - 1:
-                next_coord_index = coords[i + 1]
-            else:
-                next_coord_index = coords[0]  # 0
-
-            side_vert_indices = list(range(total_vertices, total_vertices + 4))
-            faces.extend([4] + side_vert_indices)
-            side_vertices = create_side_face(
-                coords, i, next_coord_index, height, clockwise_orientation
-            )
-            # if clockwise_orientation is True:  # if facing down originally
-            #    side_vertices.reverse()
-
-            vertices.extend(side_vertices)
-            colors.extend([color, color, color, color])
-            total_vertices += 4
-
-        # voids
-        bottom_void_vert_indices = list(range(len(coords_inner)))
-        bottom_void_vertices = [[c["x"], c["y"]] for c in coords_inner]
-        bottom_void_vert_indices, clockwise_orientation_void = fix_orientation(
-            bottom_void_vertices, bottom_void_vert_indices
-        )
-        for i, c in enumerate(coords_inner):
-            if i != len(coords_inner) - 1:
-                next_coord_index = coords_inner[i + 1]
-            else:
-                next_coord_index = coords_inner[0]  # 0
-
-            side_vert_indices = list(range(total_vertices, total_vertices + 4))
-            faces.extend([4] + side_vert_indices)
-            side_vertices = create_side_face(coords_inner, i, next_coord_index, height)
-            if clockwise_orientation_void is True:  # if facing down originally
-                side_vertices.reverse()
-
-            vertices.extend(side_vertices)
-            colors.extend([color, color, color, color])
-
-    obj = Mesh.create(faces=faces, vertices=vertices, colors=colors)
-    obj.units = "m"
-    # print(obj.faces)
-    # print(obj.vertices)
-    # print(obj.colors)
-    return obj
 
 
 def getRoads(lat: float, lon: float, r: float):
