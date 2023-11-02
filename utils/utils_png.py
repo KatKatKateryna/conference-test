@@ -49,7 +49,7 @@ def writePng(color_rows: list[list[float]], path: str, x_px, y_px):
 
     p = color_rows
     f = open(path, "wb")
-    w = png.Writer(x_px, len(color_rows), greyscale=False)
+    w = png.Writer(int(len(color_rows[0]) / 3), len(color_rows), greyscale=False)
     w.write(f, p)
     f.close()
 
@@ -164,23 +164,28 @@ def get_image_pixel_color(
         palette = None
     # get average of surrounding pixels (in case it falls on the text/symbol)
     local_colors_list = []
-    average_px_offset = 1
     for offset_step_x in range((-1) * average_px_offset, average_px_offset + 1):
         coeff_x = offset_step_x  # + offset
         for offset_step_y in range((-1) * average_px_offset, average_px_offset + 1):
             coeff_y = offset_step_y  # + offset
 
-            pixel_x_index = int(x_ratio * sizeX)
+            pixel_x_index = math.floor(x_ratio * sizeX)
             if 0 <= pixel_x_index + coeff_x < sizeX:
                 pixel_x_index += coeff_x
 
-            pixel_y_index = int(y_ratio * sizeY)
+            pixel_y_index = math.floor(y_ratio * sizeY)
             if 0 <= pixel_y_index + coeff_y < sizeY:
                 pixel_y_index += coeff_y
 
             pixel_index = pixel_y_index * sizeX + pixel_x_index
             if palette is not None:
                 color_tuple = palette[pixels[pixel_index]]
+            elif metadata["alpha"] is True:
+                color_tuple = (
+                    pixels[pixel_index * 4],
+                    pixels[pixel_index * 4 + 1],
+                    pixels[pixel_index * 4 + 2],
+                )
             else:
                 color_tuple = (
                     pixels[pixel_index * 3],
@@ -188,6 +193,15 @@ def get_image_pixel_color(
                     pixels[pixel_index * 3 + 2],
                 )
             local_colors_list.append(color_tuple)
+            if sizeY <= 25:
+                print(
+                    sizeX,
+                    sizeY,
+                    x_ratio * 275,
+                    pixel_x_index,
+                    pixel_y_index,
+                    color_tuple,
+                )
 
     average_color_tuple = (
         int(mean([c[0] for c in local_colors_list])),
@@ -266,24 +280,48 @@ def add_scale_text(
     file_data = reader.read_flat()
     w, h, pixels, metadata = file_data  # w = h = 256pixels each side
 
+    print(metadata)
+    print(h)
+    print(len(pixels) / 4 / 25)
+    # print(pixels)
+    # for r in range(h):
+    #    print(pixels[r * w : (r + 1) * w])
+
     text = str(int(scale)) + "m"
     print(text)
     size = 25
+
+    color_rows = [[] for r in range(h)]
+    text = "0"
+
     # rows = size = 25  # 25 px is a height of the image and width of a digit
     # columns = 275
     for r in range(h):
         # new_color_row = []
         x_remainder = 0  # start a count
         char_index = 0
-        for c in range(width):
+        for c in range(size):
             # at each X, check which number to add
-            if c < int(width * 4 / 5):
-                continue
-            else:
-                x_remainder += 1
-                if x_remainder == size:
-                    x_remainder = 0  # restart for each char
-                    char_index += 1
+            #######################################################
+            color_tuple = get_image_pixel_color(
+                w,
+                h,
+                pixels,
+                metadata,
+                c / w,
+                r / h,
+                average_px_offset=0,
+                contrast_factor=1,
+            )
+            # print(color_tuple)
+            # print(c / size, r / h)
+            color_rows[r].extend(color_tuple)
+            continue
+            #######################################################
+
+            if x_remainder == size:
+                x_remainder = 0  # restart for each char
+                char_index += 1
 
             if char_index >= len(text):
                 # new_color_row.extend((0, 0, 0))
@@ -296,7 +334,7 @@ def add_scale_text(
                         index = int(char)
                     except:
                         index = 10
-            #index = 0
+            # index = 10
             x_ratio = (index * size + x_remainder) / w
             y_ratio = r / size
 
@@ -312,19 +350,21 @@ def add_scale_text(
                 average_px_offset=0,
                 contrast_factor=1,
             )
+            x_remainder += 1
             # only overwrite nearly black pixels
             # in the current PNG, the color scale is reversed (255-0)
             rows = len(color_rows)
-            if all([255 - color_tuple[k] > 50 for k in range(3)]):
-                color_rows[rows - int(2 * rows / margin_coeff) - h + r][3 * c] = (
-                    255 - color_tuple[0]
-                )
-                color_rows[rows - int(2 * rows / margin_coeff) - h + r][3 * c + 1] = (
-                    255 - color_tuple[1]
-                )
-                color_rows[rows - int(2 * rows / margin_coeff) - h + r][3 * c + 2] = (
-                    255 - color_tuple[2]
-                )
+            start_ind = 3 * (width - int(width / margin_coeff) - 9 - h * len(text))
+            # if all([255 - color_tuple[k] > 50 for k in range(3)]):
+            color_rows[rows - int(2 * rows / margin_coeff) - h + r][
+                start_ind + 3 * c
+            ] = color_tuple[0]
+            color_rows[rows - int(2 * rows / margin_coeff) - h + r][
+                start_ind + 3 * c + 1
+            ] = color_tuple[1]
+            color_rows[rows - int(2 * rows / margin_coeff) - h + r][
+                start_ind + 3 * c + 2
+            ] = color_tuple[2]
         # color_rows.append(new_color_row)
 
     return color_rows
