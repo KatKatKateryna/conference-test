@@ -1,7 +1,7 @@
 from pyproj import CRS, Transformer
 
 
-def createCRS(lat: float, lon: float):
+def create_crs(lat: float, lon: float):
     newCrsString = (
         "+proj=tmerc +ellps=WGS84 +datum=WGS84 +units=m +no_defs +lon_0="
         + str(lon)
@@ -13,7 +13,7 @@ def createCRS(lat: float, lon: float):
     return crs2
 
 
-def reprojectToCrs(lat: float, lon: float, crs_from, crs_to, direction="FORWARD"):
+def reproject_to_crs(lat: float, lon: float, crs_from, crs_to, direction="FORWARD"):
     transformer = Transformer.from_crs(crs_from, crs_to, always_xy=True)
     pt = transformer.transform(lon, lat, direction=direction)
 
@@ -21,10 +21,10 @@ def reprojectToCrs(lat: float, lon: float, crs_from, crs_to, direction="FORWARD"
 
 
 def getBbox(lat, lon, r):
-    projectedCrs = createCRS(lat, lon)
-    lonPlus1, latPlus1 = reprojectToCrs(1, 1, projectedCrs, "EPSG:4326")
-    scaleX = lonPlus1 - lon
-    scaleY = latPlus1 - lat
+    projected_crs = create_crs(lat, lon)
+    lon_plus_1, lat_plus_1 = reproject_to_crs(1, 1, projected_crs, "EPSG:4326")
+    scaleX = lon_plus_1 - lon
+    scaleY = lat_plus_1 - lat
 
     bbox = (lat - r * scaleY, lon - r * scaleX, lat + r * scaleY, lon + r * scaleX)
     return bbox

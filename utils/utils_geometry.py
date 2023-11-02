@@ -1,16 +1,24 @@
+import json
 import math
+from copy import copy
+
 import geopandas as gpd
 import numpy as np
 from geovoronoi import voronoi_regions_from_coords
-from shapely.geometry import Polygon
+from shapely import (
+    LineString,
+    Polygon,
+    buffer,
+    to_geojson,
+)
 from shapely.ops import triangulate
-from specklepy.objects.geometry import Line, Mesh, Point, Polyline
+from specklepy.objects import Base
+from specklepy.objects.geometry import Mesh, Point, Polyline
+
 from utils.utils_other import (
     COLOR_BLD,
     COLOR_ROAD,
-    cleanString,
-    fillList,
-    getDegreesBboxFromLocationAndRadius,
+    fill_list,
 )
 
 
@@ -185,7 +193,7 @@ def rotate_pt(coord: dict, angle: float) -> list[dict]:
     return {"x": x2, "y": y2}
 
 
-def extrudeBuilding(
+def extrude_building(
     coords: list[dict], coords_inner: list[list[dict]], height: float
 ) -> Mesh:
     """Creating 3d Speckle Mesh from the lists of outer and inner coords and height."""
@@ -247,10 +255,10 @@ def extrudeBuilding(
             triangulated_geom, _ = to_triangles(coords, coords_inner)
         except Exception as e:
             print(f"Mesh creation failed: {e}")
-            return extrudeBuilding(coords, [], height)
+            return extrude_building(coords, [], height)
             # raise e
         if triangulated_geom is None:
-            return extrudeBuilding(coords, [], height)
+            return extrude_building(coords, [], height)
 
         pt_list = [[p[0], p[1], 0] for p in triangulated_geom["vertices"]]
         triangle_list = [trg for trg in triangulated_geom["triangles"]]
@@ -340,7 +348,82 @@ def extrudeBuilding(
 
     obj = Mesh.create(faces=faces, vertices=vertices, colors=colors)
     obj.units = "m"
-    # print(obj.faces)
-    # print(obj.vertices)
-    # print(obj.colors)
+
     return obj
+
+
+def road_buffer(poly: Polyline, value: float) -> Base:
+    if value is None:
+        return
+    line = LineString([(p.x, p.y) for p in poly.as_points()])
+    area = to_geojson(buffer(line, value, cap_style="square"))  # POLYGON to geojson
+    area = json.loads(area)
+    vertices = []
+    colors = []
+    vetricesTuples = []
+
+    color = COLOR_ROAD  # (255<<24) + (150<<16) + (150<<8) + 150 # argb
+
+    for i, c in enumerate(area["coordinates"][0]):
+        if i != len(area["coordinates"][0]) - 1:
+            vertices.extend(c + [0])
+            vetricesTuples.append(c)
+            colors.append(color)
+
+    face_list = list(range(len(vetricesTuples)))
+    face_list, inverse = fix_orientation(vetricesTuples, face_list)
+    face_list.reverse()
+
+    mesh = Mesh.create(
+        vertices=vertices, colors=colors, faces=[len(vetricesTuples)] + face_list
+    )
+    mesh.units = "m"
+
+    return Base(
+        units="m",
+        displayValue=[mesh],
+        width=2 * value,
+        source_data="© OpenStreetMap",
+        source_url="https://www.openstreetmap.org/",
+    )
+
+
+def split_ways_by_intersection(ways: list[dict], tags: list[dict]) -> tuple[list[dict]]:
+    splitWays = []
+    splitTags = []
+
+    for i, w in enumerate(ways):
+        ids = w["nodes"]
+
+        try:
+            if tags[i]["area"] == "yes":
+                splitWays.append(w)
+                splitTags.append(tags[i])
+                continue
+        except:
+            pass
+
+        if len(list(set(ids))) < len(ids):  # if there are repetitions
+            wList = fill_list(ids, [])
+            for item in wList:
+                x = copy(w)
+                x["nodes"] = item
+                splitWays.append(x)
+                splitTags.append(tags[i])
+        else:
+            splitWays.append(w)
+            splitTags.append(tags[i])
+
+    return splitWays, splitTags
+
+
+def join_roads(coords: list[dict], closed: bool, height: float):
+    points = []
+
+    for i, c in enumerate(coords):
+        points.append(Point.from_list([c["x"], c["y"], 0]))
+
+    poly = Polyline.from_points(points)
+    poly.closed = closed
+    poly.units = "m"
+    return poly

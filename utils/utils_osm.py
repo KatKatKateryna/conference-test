@@ -1,72 +1,55 @@
-import json
-import math
-import os
-import shutil
-import tempfile
-from copy import copy
-from datetime import datetime
-from statistics import mean
-
-import png
 import requests
-from shapely import (
-    BufferCapStyle,
-    BufferJoinStyle,
-    LineString,
-    Point,
-    Polygon,
-    buffer,
-    offset_curve,
-    to_geojson,
-)
-from specklepy.objects import Base
-from specklepy.objects.geometry import Line, Mesh, Point, Polyline
+from specklepy.objects.geometry import Mesh
+
 from utils.utils_geometry import (
-    create_side_face,
-    extrudeBuilding,
-    fix_orientation,
+    extrude_building,
+    join_roads,
+    road_buffer,
     rotate_pt,
-    to_triangles,
+    split_ways_by_intersection,
 )
-
-# from utils.utils_network import colorSegments
 from utils.utils_other import (
-    COLOR_BLD,
-    COLOR_ROAD,
-    cleanString,
-    fillList,
-    getDegreesBboxFromLocationAndRadius,
+    clean_string,
+    get_degrees_bbox_from_lat_lon_rad,
 )
-from utils.utils_pyproj import createCRS, reprojectToCrs
+from utils.utils_pyproj import create_crs, reproject_to_crs
 
 
-def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mesh]:
-    """Get a list of 3d meshes by location lat&lon (in degrees) and radius (in meters)."""
-    # https://towardsdatascience.com/loading-data-from-openstreetmap-with-python-and-the-overpass-api-513882a27fd0
-
-    min_lat_lon, max_lat_lon = getDegreesBboxFromLocationAndRadius(lat, lon, r)
-
+def get_features_from_osm_server(
+    keyword: str, min_lat_lon: tuple[float], max_lat_lon: tuple[float]
+) -> list[dict]:
+    """Get OSM features via Overpass API."""
     overpass_url = "http://overpass-api.de/api/interpreter"
     overpass_query = f"""[out:json];
-    (node["building"]({min_lat_lon[0]},{min_lat_lon[1]},{max_lat_lon[0]},{max_lat_lon[1]});
-    way["building"]({min_lat_lon[0]},{min_lat_lon[1]},{max_lat_lon[0]},{max_lat_lon[1]});
-    relation["building"]({min_lat_lon[0]},{min_lat_lon[1]},{max_lat_lon[0]},{max_lat_lon[1]});
+    (node["{keyword}"]({min_lat_lon[0]},{min_lat_lon[1]},{max_lat_lon[0]},{max_lat_lon[1]});
+    way["{keyword}"]({min_lat_lon[0]},{min_lat_lon[1]},{max_lat_lon[0]},{max_lat_lon[1]});
+    relation["{keyword}"]({min_lat_lon[0]},{min_lat_lon[1]},{max_lat_lon[0]},{max_lat_lon[1]});
     );out body;>;out skel qt;"""
 
     response = requests.get(overpass_url, params={"data": overpass_query})
     data = response.json()
     features = data["elements"]
 
+    return features
+
+
+def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mesh]:
+    """Get a list of 3d Meshes of buildings by lat&lon (degrees) and radius (meters)."""
+    # https://towardsdatascience.com/loading-data-from-openstreetmap-with-python-and-the-overpass-api-513882a27fd0
+
+    keyword = "building"
+    min_lat_lon, max_lat_lon = get_degrees_bbox_from_lat_lon_rad(lat, lon, r)
+    features = get_features_from_osm_server(keyword, min_lat_lon, max_lat_lon)
+
     ways = []
     tags = []
     rel_outer_ways = []
-    rel_inner_ways = []
     rel_outer_ways_tags = []
+    rel_inner_ways = []
     ways_part = []
     nodes = []
 
     for feature in features:
-        # print(feature)
         # ways
         if feature["type"] == "way":
             try:
@@ -76,7 +59,7 @@ def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mes
                 try:
                     tags.append(
                         {
-                            "building": feature["tags"]["building"],
+                            f"{keyword}": feature["tags"][keyword],
                             "height": feature["tags"]["height"],
                         }
                     )
@@ -84,7 +67,7 @@ def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mes
                     try:
                         tags.append(
                             {
-                                "building": feature["tags"]["building"],
+                                f"{keyword}": feature["tags"][keyword],
                                 "levels": feature["tags"]["building:levels"],
                             }
                         )
@@ -92,12 +75,12 @@ def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mes
                         try:
                             tags.append(
                                 {
-                                    "building": feature["tags"]["building"],
+                                    f"{keyword}": feature["tags"][keyword],
                                     "layer": feature["tags"]["layer"],
                                 }
                             )
                         except:
-                            tags.append({"building": feature["tags"]["building"]})
+                            tags.append({f"{keyword}": feature["tags"][keyword]})
                 ways.append(
                     {
                         "nodes": feature["nodes"],
@@ -113,25 +96,24 @@ def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mes
             inner_ways = []
             try:
                 outer_ways_tags = {
-                    "building": feature["tags"]["building"],
+                    f"{keyword}": feature["tags"][keyword],
                     "height": feature["tags"]["height"],
                 }
             except:
                 try:
                     outer_ways_tags = {
-                        "building": feature["tags"]["building"],
+                        f"{keyword}": feature["tags"][keyword],
                         "levels": feature["tags"]["building:levels"],
                     }
                 except:
                     try:
                         outer_ways_tags = {
-                            "building": feature["tags"]["building"],
+                            f"{keyword}": feature["tags"][keyword],
                             "layer": feature["tags"]["layer"],
                         }
                     except:
-                        outer_ways_tags = {"building": feature["tags"]["building"]}
+                        outer_ways_tags = {f"{keyword}": feature["tags"][keyword]}
 
-            inner_way_single = []
             for n, x in enumerate(feature["members"]):
                 # if several Outer ways, combine them
                 if (
@@ -157,7 +139,6 @@ def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mes
                     {"id": feature["id"], "lat": feature["lat"], "lon": feature["lon"]}
                 )
 
-    # print(ways_part)
     # turn relations_OUTER into ways
     for n, x in enumerate(rel_outer_ways):  # just 1
         # there will be a list of "ways" in each of rel_outer_ways
@@ -190,7 +171,7 @@ def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mes
         try:
             tags.append(
                 {
-                    "building": rel_outer_ways_tags[n]["building"],
+                    f"{keyword}": rel_outer_ways_tags[n][keyword],
                     "height": rel_outer_ways_tags[n]["height"],
                 }
             )
@@ -198,7 +179,7 @@ def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mes
             try:
                 tags.append(
                     {
-                        "building": rel_outer_ways_tags[n]["building"],
+                        f"{keyword}": rel_outer_ways_tags[n][keyword],
                         "levels": rel_outer_ways_tags[n]["levels"],
                     }
                 )
@@ -206,16 +187,14 @@ def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mes
                 try:
                     tags.append(
                         {
-                            "building": rel_outer_ways_tags[n]["building"],
+                            f"{keyword}": rel_outer_ways_tags[n][keyword],
                             "layer": rel_outer_ways_tags[n]["layer"],
                         }
                     )
                 except:
-                    tags.append({"building": rel_outer_ways_tags[n]["building"]})
+                    tags.append({f"{keyword}": rel_outer_ways_tags[n][keyword]})
 
-    # print(full_node_list)
-
-    projectedCrs = createCRS(lat, lon)
+    projected_crs = create_crs(lat, lon)
 
     # get coords of Ways
     objectGroup = []
@@ -226,20 +205,22 @@ def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mes
         height = 9
         try:
             height = (
-                float(cleanString(tags[i]["levels"].split(",")[0].split(";")[0])) * 3
+                float(clean_string(tags[i]["levels"].split(",")[0].split(";")[0])) * 3
             )
         except:
             try:
                 height = float(
-                    cleanString(tags[i]["height"].split(",")[0].split(";")[0])
+                    clean_string(tags[i]["height"].split(",")[0].split(";")[0])
                 )
             except:
                 try:
                     if (
-                        float(cleanString(tags[i]["layer"].split(",")[0].split(";")[0]))
+                        float(
+                            clean_string(tags[i]["layer"].split(",")[0].split(";")[0])
+                        )
                         < 0
                     ):
-                        height = -1 * height
+                        height *= -1
                 except:
                     pass
 
@@ -249,8 +230,8 @@ def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mes
                 continue  # ignore last
             for n, z in enumerate(nodes):  # go though all nodes
                 if ids["nodes"][k] == nodes[n]["id"]:
-                    x, y = reprojectToCrs(
-                        nodes[n]["lat"], nodes[n]["lon"], "EPSG:4326", projectedCrs
+                    x, y = reproject_to_crs(
+                        nodes[n]["lat"], nodes[n]["lon"], "EPSG:4326", projected_crs
                     )
                     coords.append({"x": x, "y": y})
                     break
@@ -263,21 +244,21 @@ def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mes
                     continue  # ignore last
                 for n, z in enumerate(nodes):  # go though all nodes
                     if ids["inner_nodes"][l][k] == nodes[n]["id"]:
-                        x, y = reprojectToCrs(
-                            nodes[n]["lat"], nodes[n]["lon"], "EPSG:4326", projectedCrs
+                        x, y = reproject_to_crs(
+                            nodes[n]["lat"], nodes[n]["lon"], "EPSG:4326", projected_crs
                         )
                         coords_per_void.append({"x": x, "y": y})
                         break
             coords_inner.append(coords_per_void)
 
         if angle_rad == 0:
-            obj = extrudeBuilding(coords, coords_inner, height)
+            obj = extrude_building(coords, coords_inner, height)
         else:
             rotated_coords = [rotate_pt(c, angle_rad) for c in coords]
             rotated_coords_inner = [
                 [rotate_pt(c_void, angle_rad) for c_void in c] for c in coords_inner
             ]
-            obj = extrudeBuilding(rotated_coords, rotated_coords_inner, height)
+            obj = extrude_building(rotated_coords, rotated_coords_inner, height)
         if obj is not None:
             objectGroup.append((obj, tags[i]["building"]))
         coords = None
@@ -285,34 +266,16 @@ def getBuildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mes
     return objectGroup
 
 
-def getRoads(lat: float, lon: float, r: float, angle_rad: float):
-    # https://towardsdatascience.com/loading-data-from-openstreetmap-with-python-and-the-overpass-api-513882a27fd0
-
+def get_roads(lat: float, lon: float, r: float, angle_rad: float) -> tuple[list]:
+    """Get a list of Polylines and Meshes of roads by lat&lon (degrees) and radius (meters)."""
     keyword = "highway"
-
-    projectedCrs = createCRS(lat, lon)
-    lonPlus1, latPlus1 = reprojectToCrs(1, 1, projectedCrs, "EPSG:4326")
-    scaleX = lonPlus1 - lon
-    scaleY = latPlus1 - lat
-    # r = RADIUS #meters
-
-    overpass_url = "http://overpass-api.de/api/interpreter"
-    overpass_query = f"""[out:json];
-    (node["{keyword}"]({lat-r*scaleY},{lon-r*scaleX},{lat+r*scaleY},{lon+r*scaleX});
-    way["{keyword}"]({lat-r*scaleY},{lon-r*scaleX},{lat+r*scaleY},{lon+r*scaleX});
-    relation["{keyword}"]({lat-r*scaleY},{lon-r*scaleX},{lat+r*scaleY},{lon+r*scaleX});
-    );out body;>;out skel qt;"""
-
-    response = requests.get(overpass_url, params={"data": overpass_query})
-    data = response.json()
-    features = data["elements"]
+    min_lat_lon, max_lat_lon = get_degrees_bbox_from_lat_lon_rad(lat, lon, r)
+    features = get_features_from_osm_server(keyword, min_lat_lon, max_lat_lon)
 
     ways = []
     tags = []
-
     rel_outer_ways = []
     rel_outer_ways_tags = []
-
     ways_part = []
     nodes = []
 
@@ -341,9 +304,7 @@ def getRoads(lat: float, lon: float, r: float, angle_rad: float):
 
             for n, x in enumerate(feature["members"]):
                 # if several Outer ways, combine them
-                if (
-                    feature["members"][n]["type"] == "way"
-                ):  # and feature['members'][n]['role'] == 'inner':
+                if feature["members"][n]["type"] == "way":
                     outer_ways.append({"ref": feature["members"][n]["ref"]})
 
             rel_outer_ways.append(outer_ways)
@@ -355,7 +316,6 @@ def getRoads(lat: float, lon: float, r: float, angle_rad: float):
                 feature["tags"]
                 feature["tags"][keyword]
             except:
-                # if feature['tags'][keyword] != 'traffic_signals':
                 nodes.append(
                     {"id": feature["id"], "lat": feature["lat"], "lon": feature["lon"]}
                 )
@@ -389,15 +349,13 @@ def getRoads(lat: float, lon: float, r: float, angle_rad: float):
             # empty the list after each loop to start new part
             full_node_list = []
 
-        roadsCount = len(ways)
-        # print(roadsCount)
+    projected_crs = create_crs(lat, lon)
 
     # get coords of Ways
     objectGroup = []
     meshGroup = []
-    analysisGroup = []
 
-    ways, tags = splitWaysByIntersection(ways, tags)
+    ways, tags = split_ways_by_intersection(ways, tags)
 
     for i, x in enumerate(ways):  # go through each Way: 2384
         ids = ways[i]["nodes"]
@@ -422,164 +380,21 @@ def getRoads(lat: float, lon: float, r: float, angle_rad: float):
                 continue
             for n, z in enumerate(nodes):  # go though all nodes
                 if ids[k] == nodes[n]["id"]:
-                    x, y = reprojectToCrs(
-                        nodes[n]["lat"], nodes[n]["lon"], "EPSG:4326", projectedCrs
+                    x, y = reproject_to_crs(
+                        nodes[n]["lat"], nodes[n]["lon"], "EPSG:4326", projected_crs
                     )
                     coords.append({"x": x, "y": y})
                     break
 
         if angle_rad == 0:
-            obj = joinRoads(coords, closed, 0)
+            obj = join_roads(coords, closed, 0)
         else:
             rotated_coords = [rotate_pt(c, angle_rad) for c in coords]
-            obj = joinRoads(rotated_coords, closed, 0)
+            obj = join_roads(rotated_coords, closed, 0)
         objectGroup.append(obj)
 
-        objMesh = roadBuffer(obj, value)
-        # filter out ignored "areas"
-        if objMesh is not None:
+        objMesh = road_buffer(obj, value)
+        if objMesh is not None:  # filter out ignored "areas"
             meshGroup.append(objMesh)
 
-        coords = None
-        height = None
-
-    # objAnalysis, maxCount = colorSegments(lat, lon, r)
-    # for ob in objAnalysis:
-    #    mesh = lineColorBuffer(ob, maxCount, 2)
-    #    analysisGroup.append(mesh)
-
-    return objectGroup, meshGroup, []  # analysisGroup
-
-
-def lineColorBuffer(poly: Line, maxCount: float, value: float):
-    import json
-    import matplotlib as mpl
-    import matplotlib.pyplot as plt
-    from shapely import (
-        offset_curve,
-        buffer,
-        to_geojson,
-        LineString,
-        Point,
-        Polygon,
-        BufferCapStyle,
-        BufferJoinStyle,
-    )
-
-    if value is None:
-        return
-    line = LineString([(p.x, p.y) for p in [poly.start, poly.end]])
-    area = to_geojson(buffer(line, value, cap_style="square"))  # POLYGON to geojson
-    area = json.loads(area)
-    vertices = []
-    colors = []
-    vetricesTuples = []
-
-    fraction = math.pow(poly.count / maxCount, 0.4)
-    # cmap_names = sorted(m for m in plt.colormaps if not m.endswith("_r"))
-    # cmap = mpl.cm.RdYlGn.reversed()
-    cmap = mpl.colormaps["jet"]
-    map = cmap(fraction)
-    r = int(map[0] * 255)  # int(poly.count / maxCount)*255
-    g = int(map[1] * 255)  # int(poly.count / maxCount)*255
-    # if poly.count>=maxCount/2: g = 255 - int(poly.count / maxCount)*255
-    b = int(map[2] * 255)  # 255 - int( poly.count / maxCount)*255
-
-    color = (255 << 24) + (r << 16) + (g << 8) + b  # argb
-
-    for i, c in enumerate(area["coordinates"][0]):
-        if i != len(area["coordinates"][0]) - 1:
-            vertices.extend(c + [0])
-            vetricesTuples.append(c)
-            colors.append(color)
-
-    face_list = list(range(len(vetricesTuples)))
-    face_list, inverse = fix_orientation(vetricesTuples, face_list)
-    face_list.reverse()
-
-    mesh = Mesh.create(
-        vertices=vertices, colors=colors, faces=[len(vetricesTuples)] + face_list
-    )
-    mesh.units = "m"
-    mesh.count = poly.count / maxCount
-
-    return Base(units="m", displayValue=[mesh], width=2 * value)
-
-
-def roadBuffer(poly: Polyline, value: float) -> Base:
-    if value is None:
-        return
-    line = LineString([(p.x, p.y) for p in poly.as_points()])
-    area = to_geojson(buffer(line, value, cap_style="square"))  # POLYGON to geojson
-    area = json.loads(area)
-    vertices = []
-    colors = []
-    vetricesTuples = []
-
-    color = COLOR_ROAD  # (255<<24) + (150<<16) + (150<<8) + 150 # argb
-
-    for i, c in enumerate(area["coordinates"][0]):
-        if i != len(area["coordinates"][0]) - 1:
-            vertices.extend(c + [0])
-            vetricesTuples.append(c)
-            colors.append(color)
-
-    face_list = list(range(len(vetricesTuples)))
-    face_list, inverse = fix_orientation(vetricesTuples, face_list)
-    face_list.reverse()
-
-    mesh = Mesh.create(
-        vertices=vertices, colors=colors, faces=[len(vetricesTuples)] + face_list
-    )
-    mesh.units = "m"
-
-    return Base(
-        units="m",
-        displayValue=[mesh],
-        width=2 * value,
-        source_data="© OpenStreetMap",
-        source_url="https://www.openstreetmap.org/",
-    )
-
-
-def splitWaysByIntersection(ways: list, tags: list):
-    splitWays = []
-    splitTags = []
-
-    for i, w in enumerate(ways):
-        ids = w["nodes"]
-
-        try:
-            if tags[i]["area"] == "yes":
-                splitWays.append(w)
-                splitTags.append(tags[i])
-                continue
-        except:
-            pass
-
-        if len(list(set(ids))) < len(ids):  # if there are repetitions
-            wList = fillList(ids, [])
-            for item in wList:
-                x = copy(w)
-                x["nodes"] = item
-                splitWays.append(x)
-                splitTags.append(tags[i])
-        else:
-            splitWays.append(w)
-            splitTags.append(tags[i])
-
-    return splitWays, splitTags
-
-
-def joinRoads(coords: list[dict], closed: bool, height: float):
-    from specklepy.objects.geometry import Polyline, Point
-
-    points = []
-
-    for i, c in enumerate(coords):
-        points.append(Point.from_list([c["x"], c["y"], 0]))
-
-    poly = Polyline.from_points(points)
-    poly.closed = closed
-    poly.units = "m"
-    return poly
+    return objectGroup, meshGroup

@@ -8,18 +8,18 @@ from statistics import mean
 import png
 import requests
 
-from utils.utils_other import getDegreesBboxFromLocationAndRadius
+from utils.utils_other import get_degrees_bbox_from_lat_lon_rad
 
-margin_coeff = 100
+MARGIN_COEFF = 100
 
 assets_folder_path = os.path.dirname(os.path.abspath(__file__)).replace(
     "utils", "assets"
 )
-path_copyright = os.path.join(assets_folder_path, "copyright.PNG")
-path_numbers = os.path.join(assets_folder_path, "numbers.PNG")
+PATH_COPYRIGHT = os.path.join(assets_folder_path, "copyright.PNG")
+PATH_NUMBERS = os.path.join(assets_folder_path, "numbers.PNG")
 
 
-def createImageFromBbox(lat: float, lon: float, radius: float) -> str:
+def create_image_from_bbox(lat: float, lon: float, radius: float) -> str:
     """Get OSM tile image around location and save to PNG file, returns file path."""
     temp_folder = "automate_tiles_" + str(datetime.now().timestamp())[:6]
     temp_folder_path = os.path.join(os.path.abspath(tempfile.gettempdir()), temp_folder)
@@ -27,7 +27,7 @@ def createImageFromBbox(lat: float, lon: float, radius: float) -> str:
     if not folderExist:
         os.makedirs(temp_folder_path)
 
-    min_lat_lon, max_lat_lon = getDegreesBboxFromLocationAndRadius(lat, lon, radius)
+    min_lat_lon, max_lat_lon = get_degrees_bbox_from_lat_lon_rad(lat, lon, radius)
 
     x_px = min(2048, int(5 * radius))
     y_px = min(2048, int(5 * radius))
@@ -221,22 +221,23 @@ def add_scale_bar(
     color_rows, pixels_per_meter, scale_meters, size
 ) -> list[list[float]]:
     """Add a scale bar."""
-    line_width = int(size / margin_coeff / 5)
+    line_width = int(size / MARGIN_COEFF / 5)
     line_width = max(2, line_width)
 
-    scale_start = int(size / margin_coeff)
-    scale_end = int(size / margin_coeff + scale_meters * pixels_per_meter)
+    scale_start = int(size / MARGIN_COEFF)
+    scale_end = int(size / MARGIN_COEFF + scale_meters * pixels_per_meter)
 
-    tick_height = 2 * size / margin_coeff
+    tick_height = 2 * size / MARGIN_COEFF
     tick_height = max(tick_height, 4)
+    tick_height = min(tick_height, 30 + line_width - size / MARGIN_COEFF)
     rows = len(color_rows)
 
     for i, _ in enumerate(range(rows)):
         # stop at the necessary row for ticks
         count = 0
         if (
-            i >= (rows - min(2, size / margin_coeff) - line_width - tick_height)
-            and i < rows - min(2, size / margin_coeff) - line_width
+            i >= (rows - min(2, size / MARGIN_COEFF) - line_width - tick_height)
+            and i < rows - min(2, size / MARGIN_COEFF) - line_width
             and count <= line_width
         ):
             count += 1
@@ -252,8 +253,8 @@ def add_scale_bar(
         # stop at the necessary row for the strip
         count = 0
         if (
-            i >= rows - min(2, size / margin_coeff) - line_width
-            and i < rows - min(2, size / margin_coeff)
+            i >= rows - min(2, size / MARGIN_COEFF) - line_width
+            and i < rows - min(2, size / MARGIN_COEFF)
             and count <= line_width
         ):
             count += 1
@@ -269,11 +270,11 @@ def add_scale_text(
     color_rows: list[float], scale: int, width: float
 ) -> list[list[float]]:
     """Add text (e.g. '100 m') to the scale bar."""
-    fileExists = os.path.isfile(path_numbers)
+    fileExists = os.path.isfile(PATH_NUMBERS)
     if not fileExists:
         raise Exception("Number file not found")
 
-    reader = png.Reader(filename=path_numbers)
+    reader = png.Reader(filename=PATH_NUMBERS)
     file_data = reader.read_flat()
     w, h, pixels, metadata = file_data  # w = h = 256pixels each side
 
@@ -281,7 +282,7 @@ def add_scale_text(
     size = 25
     px_cut = 5
 
-    new_size = int(3 * width / margin_coeff)
+    new_size = int(3 * width / MARGIN_COEFF)
     new_size = min(new_size, 25)
     new_size = max(new_size, 12)
     size_coeff = new_size / size
@@ -289,8 +290,8 @@ def add_scale_text(
     new_h = int(h * size_coeff)
     new_w = int(w * size_coeff)
 
-    start_row = width  # int(rows - 2 * rows / margin_coeff - new_h)
-    start_ind = int(3 * 2 * width / margin_coeff)
+    start_row = width  # int(rows - 2 * rows / MARGIN_COEFF - new_h)
+    start_ind = int(3 * 2 * width / MARGIN_COEFF)
 
     for r in range(new_h):
         x_remainder = px_cut * size_coeff  # start a count
@@ -342,23 +343,23 @@ def add_scale_text(
 
 def add_copyright_text(color_rows: list[float], width: float) -> list[list[float]]:
     """Add copyright notice."""
-    fileExists = os.path.isfile(path_copyright)
+    fileExists = os.path.isfile(PATH_COPYRIGHT)
     if not fileExists:
         raise Exception("Copyright file not found")
 
-    reader = png.Reader(filename=path_copyright)
+    reader = png.Reader(filename=PATH_COPYRIGHT)
     file_data = reader.read_flat()
     w, h, pixels, metadata = file_data  # w = h = 256pixels each side
 
     size = 25
 
-    new_size = int(4 * width / margin_coeff)
+    new_size = int(4 * width / MARGIN_COEFF)
     new_size = min(new_size, 30)
     new_size = max(new_size, 15)
     size_coeff = new_size / size
 
     new_h = int(h * size_coeff)
-    start_ind = int(width - width / margin_coeff - w * size_coeff)
+    start_ind = int(width - width / MARGIN_COEFF - w * size_coeff)
 
     for r in range(new_h):
         new_row = []

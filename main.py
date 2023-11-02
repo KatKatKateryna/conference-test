@@ -13,10 +13,9 @@ from speckle_automate import (
 from specklepy.objects import Base
 from specklepy.objects.other import Collection
 
-from flatten import flatten_base
-from utils.utils_osm import getBuildings, getRoads
+from utils.utils_osm import get_buildings, get_roads
 from utils.utils_other import RESULT_BRANCH
-from utils.utils_png import createImageFromBbox
+from utils.utils_png import create_image_from_bbox
 
 
 class FunctionInputs(AutomateBase):
@@ -53,33 +52,25 @@ def automate_function(
     # the context provides a conveniet way, to receive the triggering version
     try:
         base = automate_context.receive_version()
-        data = automate_context.automation_run_data
 
-        project_id = data.project_id
-        projInfo = base[
-            "info"
-        ]  # [o for o in objects if o.speckle_type.endswith("Revit.ProjectInfo")][0]
+        projInfo = base["info"]
+        if not projInfo.speckle_type.endswith("Revit.ProjectInfo"):
+            automate_context.mark_run_failed("Not a valid 'Revit.ProjectInfo' provided")
 
         lon = np.rad2deg(projInfo["longitude"])
         lat = np.rad2deg(projInfo["latitude"])
-        angle_deg = 0
-        try:
-            angle_rad = -1 * projInfo["locations"][0]["trueNorth"]
-            angle_deg = np.rad2deg(angle_rad)
-        except:  # noqa: E722
-            pass
+        angle_rad = -1 * projInfo["locations"][0]["trueNorth"]
 
-        commitObj = Collection(
-            elements=[],
-            units="m",
-            name="Context",
-            collectionType="ContextLayer",
-            source_data="© OpenStreetMap",
-            source_url="https://www.openstreetmap.org/",
+        # get OSM buildings and roads in given area
+        building_meshes = get_buildings(
+            lat, lon, function_inputs.radius_in_meters, angle_rad
+        )
+        roads_lines, roads_meshes = get_roads(
+            lat, lon, function_inputs.radius_in_meters, angle_rad
         )
 
-        blds = getBuildings(lat, lon, function_inputs.radius_in_meters, angle_rad)
-        bases = [
+        # turn Speckle Meshes into Base objects with additional attributes
+        building_base_objects = [
             Base(
                 units="m",
                 displayValue=[b],
@@ -87,30 +78,26 @@ def automate_function(
                 source_data="© OpenStreetMap",
                 source_url="https://www.openstreetmap.org/",
             )
-            for b, tag in blds
+            for b, tag in building_meshes
         ]
-        bldObj = Collection(
-            elements=bases,
+        building_layer = Collection(
+            elements=building_base_objects,
             units="m",
             name="Context",
             collectionType="BuildingsLayer",
             source_data="© OpenStreetMap",
             source_url="https://www.openstreetmap.org/",
         )
-
-        roads, meshes, analysisMeshes = getRoads(
-            lat, lon, function_inputs.radius_in_meters, angle_rad
-        )
-        roadObj = Collection(
-            elements=roads,
+        roads_line_layer = Collection(
+            elements=roads_lines,
             units="m",
             name="Context",
             collectionType="RoadsLayer",
             source_data="© OpenStreetMap",
             source_url="https://www.openstreetmap.org/",
         )
-        roadMeshObj = Collection(
-            elements=meshes,
+        roads_mesh_layer = Collection(
+            elements=roads_meshes,
             units="m",
             name="Context",
             collectionType="RoadMeshesLayer",
@@ -118,19 +105,23 @@ def automate_function(
             source_url="https://www.openstreetmap.org/",
         )
 
-        # add objects to new Collection
-        commitObj.elements.append(bldObj)
-        commitObj.elements.append(roadObj)
-        commitObj.elements.append(roadMeshObj)
+        # add objects to a commit Collection object
+        commitObj = Collection(
+            elements=[building_layer, roads_line_layer, roads_mesh_layer],
+            units="m",
+            name="Context",
+            collectionType="ContextLayer",
+            source_data="© OpenStreetMap",
+            source_url="https://www.openstreetmap.org/",
+        )
 
+        # create a commit
         automate_context.create_new_version_in_project(
             commitObj, RESULT_BRANCH, "Context from Automate"
         )
 
-        # automate_context._automation_result.result_view = f"{data.speckle_server_url}/projects/{data.project_id}/models/{data.model_id},{br_id}"
-
-        # create and add basemape png file
-        path = createImageFromBbox(lat, lon, function_inputs.radius_in_meters)
+        # create and add a basemap png file
+        path = create_image_from_bbox(lat, lon, function_inputs.radius_in_meters)
         automate_context.store_file_result(path)
 
         automate_context.mark_run_success("Created 3D context")
@@ -167,17 +158,16 @@ from specklepy.core.api.client import SpeckleClient
 
 lat = 51.500639115906935  # 52.52014  # 51.500639115906935
 lon = -0.12688576809010643  # 13.40371  # -0.12688576809010643
-radius_in_meters = 50
+radius_in_meters = 1000
 angle_rad = 1
 streamId = "8ef52c7aa7"
 
-r"""
 acc = get_local_accounts()[1]
 client = SpeckleClient(acc.serverInfo.url, acc.serverInfo.url.startswith("https"))
 client.authenticate_with_account(acc)
 transport = ServerTransport(client=client, stream_id=streamId)
 
-blds = getBuildings(lat, lon, radius_in_meters, angle_rad)
+blds = get_buildings(lat, lon, radius_in_meters, angle_rad)
 base_blds = [Base(units="m", displayValue=[b], building=tag) for b, tag in blds]
 
 commit_obj = Collection(
@@ -194,7 +184,7 @@ commit_id = client.commit.create(
     message="Sent objects from Automate tests",
     source_application="Automate tests",
 )
-"""
 
-path = createImageFromBbox(lat, lon, radius_in_meters)
+
+path = create_image_from_bbox(lat, lon, radius_in_meters)
 print(path)
