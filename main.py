@@ -29,7 +29,7 @@ class FunctionInputs(AutomateBase):
 
     radius_in_meters: float = Field(
         title="Radius in meters",
-        ge=20,
+        ge=50,
         le=1000,
         description=(
             "Radius from the Model location," " derived from Revit model lat, lon."
@@ -167,7 +167,7 @@ from specklepy.core.api.client import SpeckleClient
 
 lat = 51.500639115906935  # 52.52014  # 51.500639115906935
 lon = -0.12688576809010643  # 13.40371  # -0.12688576809010643
-radius_in_meters = 200
+radius_in_meters = 100
 angle_rad = 1
 streamId = "8ef52c7aa7"
 
