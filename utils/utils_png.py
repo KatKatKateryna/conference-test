@@ -225,11 +225,14 @@ def add_scale_bar(color_rows, radius, size) -> list[list[float]]:
     scale_start = int(size / margin_coeff)
     scale_end = int(size / margin_coeff + scale_meters * pixels_per_meter)
 
+    tick_height = 2 * size / margin_coeff
+    tick_height = max(tick_height, 4)
+
     for i, _ in enumerate(range(size)):
         # stop at the necessary row for ticks
         count = 0
         if (
-            i >= (size - 4 * size / margin_coeff)
+            i >= (size - size / margin_coeff - line_width - tick_height)
             and count <= line_width
             and i < size - size / margin_coeff - line_width
         ):
@@ -269,6 +272,85 @@ def add_scale_text(
         raise Exception("Number file not found")
 
     reader = png.Reader(filename=path_numbers)
+    file_data = reader.read_flat()
+    w, h, pixels, metadata = file_data  # w = h = 256pixels each side
+
+    print(metadata)
+    print(h)
+    print(len(pixels) / 4 / 25)
+
+    text = str(int(scale)) + "m"
+    print(text)
+    size = 25
+
+    new_size = int(3 * width / margin_coeff)
+    new_size = min(new_size, 25)
+    new_size = max(new_size, 12)
+    size_coeff = new_size / size
+
+    new_h = int(h * size_coeff)
+    new_w = int(w * size_coeff)
+    rows = len(color_rows)
+    start_row = int(rows - 2 * rows / margin_coeff - new_h)
+    start_ind = int(3 * 2 * width / margin_coeff)
+    print(start_ind)
+    print(new_size)
+
+    for r in range(new_h):
+        x_remainder = 0  # start a count
+        char_index = 0
+        for c in range(new_w):
+            # at each X, check which number to add
+            if round(x_remainder, 2) == round(size * size_coeff, 2):
+                x_remainder = 0  # restart for each char
+                char_index += 1
+
+            if char_index >= len(text):
+                continue
+
+            # find the data from that number
+            for char in "0123456789m":
+                if char == text[char_index]:
+                    try:
+                        index = int(char)
+                    except:
+                        index = 10
+            x_ratio = (index * size * size_coeff + x_remainder) / new_w
+            # get pixel color
+            color_tuple = get_image_pixel_color(
+                w,
+                h,
+                pixels,
+                metadata,
+                x_ratio,
+                r / new_h,
+                average_px_offset=0,
+                contrast_factor=1,
+            )
+            x_remainder += 1 * size_coeff
+            row_index = start_row + r
+            column_index = start_ind + int(
+                3 * (size * char_index * size_coeff + x_remainder)
+            )
+            # only overwrite nearly black pixels
+            if all([255 - color_tuple[k] > 50 for k in range(3)]):
+                color_rows[row_index][column_index] = max(color_tuple)
+                color_rows[row_index][column_index + 1] = max(color_tuple)
+                color_rows[row_index][column_index + 2] = max(color_tuple)
+        # color_rows.append(new_color_row)
+
+    return color_rows
+
+
+def add_copyright_text(
+    color_rows: list[float], scale: int, width: float
+) -> list[list[float]]:
+    """Add text (e.g. '100 m') to the scale bar."""
+    fileExists = os.path.isfile(path_copyright)
+    if not fileExists:
+        raise Exception("Copyright file not found")
+
+    reader = png.Reader(filename=path_copyright)
     file_data = reader.read_flat()
     w, h, pixels, metadata = file_data  # w = h = 256pixels each side
 
