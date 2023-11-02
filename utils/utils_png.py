@@ -279,6 +279,7 @@ def add_scale_text(
 
     text = str(int(scale)) + "m"
     size = 25
+    px_cut = 5
 
     new_size = int(3 * width / margin_coeff)
     new_size = min(new_size, 25)
@@ -287,17 +288,17 @@ def add_scale_text(
 
     new_h = int(h * size_coeff)
     new_w = int(w * size_coeff)
-    rows = len(color_rows)
+
     start_row = width  # int(rows - 2 * rows / margin_coeff - new_h)
     start_ind = int(3 * 2 * width / margin_coeff)
 
     for r in range(new_h):
-        x_remainder = 0  # start a count
+        x_remainder = px_cut * size_coeff  # start a count
         char_index = 0
         for c in range(new_w):
             # at each X, check which number to add
-            if round(x_remainder, 2) == round(size * size_coeff, 2):
-                x_remainder = 0  # restart for each char
+            if round(x_remainder, 2) == round((size - px_cut) * size_coeff, 2):
+                x_remainder = px_cut * size_coeff  # restart for each char
                 char_index += 1
 
             if char_index >= len(text):
@@ -325,14 +326,16 @@ def add_scale_text(
             x_remainder += 1 * size_coeff
             row_index = start_row + r
             column_index = start_ind + int(
-                3 * (size * char_index * size_coeff + x_remainder)
+                3 * ((size - 2 * px_cut) * char_index * size_coeff + x_remainder)
             )
+            if char_index == len(text) - 1:
+                column_index += int(3 * (size - 2 * px_cut) * size_coeff)
+
             # only overwrite nearly black pixels
-            if all([255 - color_tuple[k] > 50 for k in range(3)]):
-                color_rows[row_index][column_index] = max(color_tuple)
-                color_rows[row_index][column_index + 1] = max(color_tuple)
-                color_rows[row_index][column_index + 2] = max(color_tuple)
-        # color_rows.append(new_color_row)
+            if all([color_tuple[k] < 100 for k in range(3)]):
+                color_rows[row_index][column_index] = min(color_tuple)
+                color_rows[row_index][column_index + 1] = min(color_tuple)
+                color_rows[row_index][column_index + 2] = min(color_tuple)
 
     return color_rows
 
