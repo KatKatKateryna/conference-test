@@ -10,6 +10,15 @@ import requests
 
 from utils.utils_other import getDegreesBboxFromLocationAndRadius
 
+margin_coeff = 100
+line_width = 2
+
+assets_folder_path = os.path.dirname(os.path.abspath(__file__)).replace(
+    "utils", "assets"
+)
+path_copyright = os.path.join(assets_folder_path, "copyright.PNG")
+path_numbers = os.path.join(assets_folder_path, "numbers.PNG")
+
 
 def createImageFromBbox(lat: float, lon: float, radius: float) -> str:
     """Get OSM tile image around location and save to PNG file, returns file path."""
@@ -33,14 +42,14 @@ def createImageFromBbox(lat: float, lon: float, radius: float) -> str:
     return file_name
 
 
-def writePng(color_rows: list[list], path: str, x_px, y_px):
+def writePng(color_rows: list[list[float]], path: str, x_px, y_px):
     """Writes PNG file from rows with color tuples."""
     if not path.endswith(".png"):
         return
 
     p = color_rows
     f = open(path, "wb")
-    w = png.Writer(x_px, y_px, greyscale=False)
+    w = png.Writer(x_px, len(color_rows), greyscale=False)
     w.write(f, p)
     f.close()
 
@@ -53,7 +62,7 @@ def get_colors_of_points_from_tiles(
     png_name: str,
     x_px: int = 256,
     y_px: int = 256,
-) -> list[int]:
+) -> list[list[float]]:
     """Retrieves colors from OSM tiles from bbox and writes to PNG file 256x256 px."""
     # set the map zoom level
     zoom = 18
@@ -111,7 +120,6 @@ def get_colors_of_points_from_tiles(
             remainder_x_degrees = x % 1  # (lon + 180) % degrees_in_tile_x
             remainder_y_degrees = y % 1  # y_remapped_value % degrees_in_tile_y
 
-            # get pixel color
             reader = png.Reader(filename=file_path)
             try:
                 file_data = all_files_data[all_tile_names.index(file_name)]
@@ -119,45 +127,19 @@ def get_colors_of_points_from_tiles(
                 file_data = reader.read_flat()
                 all_tile_names.append(file_name)
                 all_files_data.append(file_data)
-
             w, h, pixels, metadata = file_data  # w = h = 256pixels each side
-            palette = metadata["palette"]
-
-            # get average of surrounding pixels (in case it falls on the text/symbol)
-            local_colors_list = []
-            offset = 1
-            for offset_step_x in range((-1) * offset, offset + 1):
-                coeff_x = offset_step_x  # + offset
-                for offset_step_y in range((-1) * offset, offset + 1):
-                    coeff_y = offset_step_y  # + offset
-
-                    pixel_x_index = int(remainder_x_degrees * w)
-                    # pixel_x_index = int(remainder_x_degrees / degrees_in_tile_x * w)
-                    if 0 <= pixel_x_index + coeff_x < w:
-                        pixel_x_index += coeff_x
-
-                    pixel_y_index = int(remainder_y_degrees * w)
-                    # pixel_y_index = int(remainder_y_degrees / degrees_in_tile_y * w)
-                    if 0 <= pixel_y_index + coeff_y < w:
-                        pixel_y_index += coeff_y
-
-                    pixel_index = pixel_y_index * w + pixel_x_index
-                    color_tuple = palette[pixels[pixel_index]]
-                    local_colors_list.append(color_tuple)
-
-            average_color_tuple = (
-                int(mean([c[0] for c in local_colors_list])),
-                int(mean([c[1] for c in local_colors_list])),
-                int(mean([c[2] for c in local_colors_list])),
+            # print(len(pixels))
+            # get pixel color
+            average_color_tuple = get_image_pixel_color(
+                w,
+                h,
+                pixels,
+                metadata,
+                remainder_x_degrees,
+                remainder_y_degrees,
+                average_px_offset=1,
+                contrast_factor=2,
             )
-            # increase contrast
-            factor = 2
-            average_color_tuple = (
-                int(average_color_tuple[0] / factor) * factor,
-                int(average_color_tuple[1] / factor) * factor,
-                int(average_color_tuple[2] / factor) * factor,
-            )
-
             color_rows[len(range_lat) - i - 1].extend(average_color_tuple)
 
     color_rows = add_scale_bar(color_rows, radius, x_px)
@@ -165,7 +147,64 @@ def get_colors_of_points_from_tiles(
     return color_rows
 
 
-def add_scale_bar(color_rows, radius, size):
+def get_image_pixel_color(
+    sizeX,
+    sizeY,
+    pixels,
+    metadata,
+    x_ratio,
+    y_ratio,
+    average_px_offset=1,
+    contrast_factor=2,
+) -> tuple:
+    """From PNG file reader data, get pixel color at x,y (normalized) position."""
+    try:
+        palette = metadata["palette"]
+    except KeyError as ke:
+        palette = None
+    # get average of surrounding pixels (in case it falls on the text/symbol)
+    local_colors_list = []
+    average_px_offset = 1
+    for offset_step_x in range((-1) * average_px_offset, average_px_offset + 1):
+        coeff_x = offset_step_x  # + offset
+        for offset_step_y in range((-1) * average_px_offset, average_px_offset + 1):
+            coeff_y = offset_step_y  # + offset
+
+            pixel_x_index = int(x_ratio * sizeX)
+            if 0 <= pixel_x_index + coeff_x < sizeX:
+                pixel_x_index += coeff_x
+
+            pixel_y_index = int(y_ratio * sizeY)
+            if 0 <= pixel_y_index + coeff_y < sizeY:
+                pixel_y_index += coeff_y
+
+            pixel_index = pixel_y_index * sizeX + pixel_x_index
+            if palette is not None:
+                color_tuple = palette[pixels[pixel_index]]
+            else:
+                color_tuple = (
+                    pixels[pixel_index * 3],
+                    pixels[pixel_index * 3 + 1],
+                    pixels[pixel_index * 3 + 2],
+                )
+            local_colors_list.append(color_tuple)
+
+    average_color_tuple = (
+        int(mean([c[0] for c in local_colors_list])),
+        int(mean([c[1] for c in local_colors_list])),
+        int(mean([c[2] for c in local_colors_list])),
+    )
+    # increase contrast
+    contrast_factor = 2
+    average_color_tuple = (
+        int(average_color_tuple[0] / contrast_factor) * contrast_factor,
+        int(average_color_tuple[1] / contrast_factor) * contrast_factor,
+        int(average_color_tuple[2] / contrast_factor) * contrast_factor,
+    )
+    return average_color_tuple
+
+
+def add_scale_bar(color_rows, radius, size) -> list[list[float]]:
     """Add a scale bar."""
     pixels_per_meter = size / 2 / radius
 
@@ -176,11 +215,7 @@ def add_scale_bar(color_rows, radius, size):
             scale_meters = 1
     print(radius)
     print(scale_meters)
-    print(size)
-    print(pixels_per_meter)
 
-    margin_coeff = 100
-    line_width = 2
     scale_start = size - size / margin_coeff - (scale_meters * pixels_per_meter)
     scale_end = size - size / margin_coeff
 
@@ -215,8 +250,81 @@ def add_scale_bar(color_rows, radius, size):
                 if k >= 3 * scale_start and k < 3 * scale_end:
                     color_rows[i][k] = 0
 
+    color_rows = add_scale_text(color_rows, scale_meters, width=size)
     return color_rows
 
 
-# path = createImageFromBbox(51.50067837147388, -0.1267429761070425, 300)
-# print(path)
+def add_scale_text(
+    color_rows: list[float], scale: int, width: float
+) -> list[list[float]]:
+    """Add text (e.g. '100 m') to the scale bar."""
+    fileExists = os.path.isfile(path_numbers)
+    if not fileExists:
+        raise Exception("Number file not found")
+
+    reader = png.Reader(filename=path_numbers)
+    file_data = reader.read_flat()
+    w, h, pixels, metadata = file_data  # w = h = 256pixels each side
+
+    text = str(int(scale)) + "m"
+    print(text)
+    size = 25
+    # rows = size = 25  # 25 px is a height of the image and width of a digit
+    # columns = 275
+    for r in range(h):
+        # new_color_row = []
+        x_remainder = 0  # start a count
+        char_index = 0
+        for c in range(width):
+            # at each X, check which number to add
+            if c < int(width * 4 / 5):
+                continue
+            else:
+                x_remainder += 1
+                if x_remainder == size:
+                    x_remainder = 0  # restart for each char
+                    char_index += 1
+
+            if char_index >= len(text):
+                # new_color_row.extend((0, 0, 0))
+                continue
+
+            # find the data from that number
+            for char in "0123456789m":
+                if char == text[char_index]:
+                    try:
+                        index = int(char)
+                    except:
+                        index = 10
+            #index = 0
+            x_ratio = (index * size + x_remainder) / w
+            y_ratio = r / size
+
+            print(float(index), 3 * c, x_ratio, x_remainder)
+            # get pixel color
+            color_tuple = get_image_pixel_color(
+                w,
+                h,
+                pixels,
+                metadata,
+                x_ratio,
+                y_ratio,
+                average_px_offset=0,
+                contrast_factor=1,
+            )
+            # only overwrite nearly black pixels
+            # in the current PNG, the color scale is reversed (255-0)
+            rows = len(color_rows)
+            if all([255 - color_tuple[k] > 50 for k in range(3)]):
+                color_rows[rows - int(2 * rows / margin_coeff) - h + r][3 * c] = (
+                    255 - color_tuple[0]
+                )
+                color_rows[rows - int(2 * rows / margin_coeff) - h + r][3 * c + 1] = (
+                    255 - color_tuple[1]
+                )
+                color_rows[rows - int(2 * rows / margin_coeff) - h + r][3 * c + 2] = (
+                    255 - color_tuple[2]
+                )
+        # color_rows.append(new_color_row)
+
+    return color_rows
