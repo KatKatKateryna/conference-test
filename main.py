@@ -167,7 +167,7 @@ from specklepy.core.api.client import SpeckleClient
 
 lat = 51.500639115906935  # 52.52014  # 51.500639115906935
 lon = -0.12688576809010643  # 13.40371  # -0.12688576809010643
-radius_in_meters = 100
+radius_in_meters = 200
 angle_rad = 1
 streamId = "8ef52c7aa7"
 

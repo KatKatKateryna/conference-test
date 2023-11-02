@@ -11,7 +11,6 @@ import requests
 from utils.utils_other import getDegreesBboxFromLocationAndRadius
 
 margin_coeff = 100
-line_width = 2
 
 assets_folder_path = os.path.dirname(os.path.abspath(__file__)).replace(
     "utils", "assets"
@@ -193,15 +192,6 @@ def get_image_pixel_color(
                     pixels[pixel_index * 3 + 2],
                 )
             local_colors_list.append(color_tuple)
-            if sizeY <= 25:
-                print(
-                    sizeX,
-                    sizeY,
-                    x_ratio * 275,
-                    pixel_x_index,
-                    pixel_y_index,
-                    color_tuple,
-                )
 
     average_color_tuple = (
         int(mean([c[0] for c in local_colors_list])),
@@ -229,15 +219,17 @@ def add_scale_bar(color_rows, radius, size) -> list[list[float]]:
             scale_meters = 1
     print(radius)
     print(scale_meters)
+    line_width = int(size / margin_coeff / 5)
+    line_width = max(2, line_width)
 
-    scale_start = size - size / margin_coeff - (scale_meters * pixels_per_meter)
-    scale_end = size - size / margin_coeff
+    scale_start = int(size / margin_coeff)
+    scale_end = int(size / margin_coeff + scale_meters * pixels_per_meter)
 
     for i, _ in enumerate(range(size)):
         # stop at the necessary row for ticks
         count = 0
         if (
-            i >= (size - size / margin_coeff) - 5 * line_width
+            i >= (size - 4 * size / margin_coeff)
             and count <= line_width
             and i < size - size / margin_coeff - line_width
         ):
@@ -245,9 +237,9 @@ def add_scale_bar(color_rows, radius, size) -> list[list[float]]:
             for k, _ in enumerate(range(3 * size)):
                 # only color pixel within the scale range
                 if k in list(
-                    range(int(3 * scale_start), int(3 * scale_start) + 3 * line_width)
+                    range(int(3 * scale_start), int(3 * scale_start + line_width))
                 ) or k in list(
-                    range(int(3 * scale_end - 3 * line_width), int(3 * scale_end))
+                    range(int(3 * (scale_end - line_width)), int(3 * scale_end))
                 ):
                     color_rows[i][k] = 0
 
@@ -283,48 +275,34 @@ def add_scale_text(
     print(metadata)
     print(h)
     print(len(pixels) / 4 / 25)
-    # print(pixels)
-    # for r in range(h):
-    #    print(pixels[r * w : (r + 1) * w])
 
     text = str(int(scale)) + "m"
     print(text)
     size = 25
 
-    color_rows = [[] for r in range(h)]
-    text = "0"
+    new_size = int(3 * width / margin_coeff)
+    new_size = min(new_size, 25)
+    new_size = max(new_size, 12)
+    size_coeff = new_size / size
 
-    # rows = size = 25  # 25 px is a height of the image and width of a digit
-    # columns = 275
-    for r in range(h):
-        # new_color_row = []
+    new_h = int(h * size_coeff)
+    new_w = int(w * size_coeff)
+    rows = len(color_rows)
+    start_row = int(rows - 2 * rows / margin_coeff - new_h)
+    start_ind = int(3 * 2 * width / margin_coeff)
+    print(start_ind)
+    print(new_size)
+
+    for r in range(new_h):
         x_remainder = 0  # start a count
         char_index = 0
-        for c in range(size):
+        for c in range(new_w):
             # at each X, check which number to add
-            #######################################################
-            color_tuple = get_image_pixel_color(
-                w,
-                h,
-                pixels,
-                metadata,
-                c / w,
-                r / h,
-                average_px_offset=0,
-                contrast_factor=1,
-            )
-            # print(color_tuple)
-            # print(c / size, r / h)
-            color_rows[r].extend(color_tuple)
-            continue
-            #######################################################
-
-            if x_remainder == size:
+            if round(x_remainder, 2) == round(size * size_coeff, 2):
                 x_remainder = 0  # restart for each char
                 char_index += 1
 
             if char_index >= len(text):
-                # new_color_row.extend((0, 0, 0))
                 continue
 
             # find the data from that number
@@ -334,11 +312,7 @@ def add_scale_text(
                         index = int(char)
                     except:
                         index = 10
-            # index = 10
-            x_ratio = (index * size + x_remainder) / w
-            y_ratio = r / size
-
-            print(float(index), 3 * c, x_ratio, x_remainder)
+            x_ratio = (index * size * size_coeff + x_remainder) / new_w
             # get pixel color
             color_tuple = get_image_pixel_color(
                 w,
@@ -346,25 +320,20 @@ def add_scale_text(
                 pixels,
                 metadata,
                 x_ratio,
-                y_ratio,
+                r / new_h,
                 average_px_offset=0,
                 contrast_factor=1,
             )
-            x_remainder += 1
+            x_remainder += 1 * size_coeff
+            row_index = start_row + r
+            column_index = start_ind + int(
+                3 * (size * char_index * size_coeff + x_remainder)
+            )
             # only overwrite nearly black pixels
-            # in the current PNG, the color scale is reversed (255-0)
-            rows = len(color_rows)
-            start_ind = 3 * (width - int(width / margin_coeff) - 9 - h * len(text))
-            # if all([255 - color_tuple[k] > 50 for k in range(3)]):
-            color_rows[rows - int(2 * rows / margin_coeff) - h + r][
-                start_ind + 3 * c
-            ] = color_tuple[0]
-            color_rows[rows - int(2 * rows / margin_coeff) - h + r][
-                start_ind + 3 * c + 1
-            ] = color_tuple[1]
-            color_rows[rows - int(2 * rows / margin_coeff) - h + r][
-                start_ind + 3 * c + 2
-            ] = color_tuple[2]
+            if all([255 - color_tuple[k] > 50 for k in range(3)]):
+                color_rows[row_index][column_index] = max(color_tuple)
+                color_rows[row_index][column_index + 1] = max(color_tuple)
+                color_rows[row_index][column_index + 2] = max(color_tuple)
         # color_rows.append(new_color_row)
 
     return color_rows
