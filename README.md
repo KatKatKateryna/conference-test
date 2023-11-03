@@ -7,7 +7,7 @@ This function reads the location of your Revit model (latitude, longitude and an
 3d model with OSM buildings and roads within specified radius from the model. It also generates a .PNG image with a basemap 
 of your selected location. 
 ![Final model](/assets/sample_result.gif)
-![Final basemap](/assets/sample_basemap.gif)
+![Final basemap](/assets/sample_basemap.png)
 
 
 ### More details
@@ -21,7 +21,7 @@ so that the size distortions of the real-world location are minimized. 3d geomet
 1. [Create](https://automate.speckle.dev/) a new Speckle Automation.
 1. Select your Speckle Project and Speckle Model.
 1. Select the existing Speckle Function for creating OSM context.
-1. Enter a phrase to use in the comment.
+1. Enter the chosen radius from your project location.
 1. Click `Create Automation`.
 
 ### Getting Started with creating your own Speckle Function
