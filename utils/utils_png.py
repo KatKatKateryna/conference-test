@@ -20,7 +20,7 @@ PATH_NUMBERS = os.path.join(assets_folder_path, "numbers.PNG")
 
 
 def create_image_from_bbox(lat: float, lon: float, radius: float) -> str:
-    """Get OSM tile image around location and save to PNG file, returns file path."""
+    """Get OSM tile image around selected location and save it to a PNG file."""
     temp_folder = "automate_tiles_" + str(datetime.now().timestamp())[:6]
     temp_folder_path = os.path.join(os.path.abspath(tempfile.gettempdir()), temp_folder)
     folderExist = os.path.exists(temp_folder_path)
@@ -37,11 +37,12 @@ def create_image_from_bbox(lat: float, lon: float, radius: float) -> str:
     )
 
     file_name = os.path.join(temp_folder_path, png_name)
-    writePng(color_rows, file_name, x_px, y_px)
+    writePng(color_rows, file_name)
+
     return file_name
 
 
-def writePng(color_rows: list[list[float]], path: str, x_px, y_px):
+def writePng(color_rows: list[list[float]], path: str) -> None:
     """Writes PNG file from rows with color tuples."""
     if not path.endswith(".png"):
         return
@@ -62,13 +63,14 @@ def get_colors_of_points_from_tiles(
     x_px: int = 256,
     y_px: int = 256,
 ) -> list[list[float]]:
-    """Retrieves colors from OSM tiles from bbox and writes to PNG file 256x256 px."""
+    """Retrieve colors from OSM tiles from bbox and writes to PNG file 256x256 px."""
     # set the map zoom level
     zoom = 18
     zoom_max_range = 0.014
     diff_lat = max_lat_lon[0] - min_lat_lon[0]  # 0.008988129231113362 # for 500m r
     diff_lon = max_lat_lon[1] - min_lat_lon[1]  # 0.014401018774201635 # for 500m r
 
+    # adjust zoom level to avoid bulk download
     if diff_lat > zoom_max_range or diff_lon > zoom_max_range:
         zoom_step = 1
         if diff_lat / zoom_max_range >= 2 or diff_lon / zoom_max_range >= 2:
@@ -104,8 +106,10 @@ def get_colors_of_points_from_tiles(
                 fileExists = os.path.isfile(file_path)
                 # download a tile if doesn't exist yet
                 if not fileExists:
-                    url = f"https://tile.openstreetmap.org/{zoom}/{int(x)}/{int(y)}.png"  #'https://tile.openstreetmap.org/3/4/2.png'
-                    headers = {"User-Agent": f"Speckle-Automate; Image: {png_name}"}
+                    url = f"https://tile.openstreetmap.org/{zoom}/{int(x)}/{int(y)}.png"  # e.g. https://tile.openstreetmap.org/3/4/2.png
+                    headers = {
+                        "User-Agent": f"Speckle-Automate; Python 3.11; Image: {png_name}"
+                    }
                     r = requests.get(url, headers=headers, stream=True)
                     if r.status_code == 200:
                         with open(file_path, "wb") as f:
@@ -127,7 +131,7 @@ def get_colors_of_points_from_tiles(
                 all_tile_names.append(file_name)
                 all_files_data.append(file_data)
             w, h, pixels, metadata = file_data  # w = h = 256pixels each side
-            # print(len(pixels))
+
             # get pixel color
             average_color_tuple = get_image_pixel_color(
                 w,
@@ -156,19 +160,19 @@ def get_colors_of_points_from_tiles(
 
 
 def get_image_pixel_color(
-    sizeX,
-    sizeY,
-    pixels,
-    metadata,
-    x_ratio,
-    y_ratio,
-    average_px_offset=1,
-    contrast_factor=2,
-) -> tuple:
+    sizeX: int,
+    sizeY: int,
+    pixels: int,
+    metadata: dict,
+    x_ratio: float,
+    y_ratio: float,
+    average_px_offset: int = 1,
+    contrast_factor: int = 2,
+) -> tuple[int]:
     """From PNG file reader data, get pixel color at x,y (normalized) position."""
     try:
         palette = metadata["palette"]
-    except KeyError as ke:
+    except KeyError:
         palette = None
     # get average of surrounding pixels (in case it falls on the text/symbol)
     local_colors_list = []
@@ -218,7 +222,7 @@ def get_image_pixel_color(
 
 
 def add_scale_bar(
-    color_rows, pixels_per_meter, scale_meters, size
+    color_rows: list[list], pixels_per_meter: float, scale_meters: int, size: int
 ) -> list[list[float]]:
     """Add a scale bar."""
     line_width = int(size / MARGIN_COEFF / 5)
@@ -342,7 +346,7 @@ def add_scale_text(
 
 
 def add_copyright_text(color_rows: list[float], width: float) -> list[list[float]]:
-    """Add copyright notice."""
+    """Add a bar with copyright notice."""
     fileExists = os.path.isfile(PATH_COPYRIGHT)
     if not fileExists:
         raise Exception("Copyright file not found")

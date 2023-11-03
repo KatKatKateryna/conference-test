@@ -1,4 +1,5 @@
 import requests
+from specklepy.objects import Base
 from specklepy.objects.geometry import Mesh
 
 from utils.utils_geometry import (
@@ -33,7 +34,7 @@ def get_features_from_osm_server(
     return features
 
 
-def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Mesh]:
+def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]:
     """Get a list of 3d Meshes of buildings by lat&lon (degrees) and radius (meters)."""
     # https://towardsdatascience.com/loading-data-from-openstreetmap-with-python-and-the-overpass-api-513882a27fd0
 
@@ -260,13 +261,22 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Me
             ]
             obj = extrude_building(rotated_coords, rotated_coords_inner, height)
         if obj is not None:
-            objectGroup.append((obj, tags[i]["building"]))
+            base_obj = Base(
+                units="m",
+                displayValue=[obj],
+                building=tags[i]["building"],
+                source_data="© OpenStreetMap",
+                source_url="https://www.openstreetmap.org/",
+            )
+            objectGroup.append(base_obj)  # (obj, tags[i]["building"]))
+
         coords = None
         height = None
+
     return objectGroup
 
 
-def get_roads(lat: float, lon: float, r: float, angle_rad: float) -> tuple[list]:
+def get_roads(lat: float, lon: float, r: float, angle_rad: float) -> tuple[list[Base]]:
     """Get a list of Polylines and Meshes of roads by lat&lon (degrees) and radius (meters)."""
     keyword = "highway"
     min_lat_lon, max_lat_lon = get_degrees_bbox_from_lat_lon_rad(lat, lon, r)

@@ -1,8 +1,5 @@
 from copy import copy
 
-import numpy as np
-from specklepy.objects.geometry import Point
-
 from utils.utils_pyproj import create_crs, reproject_to_crs
 
 RESULT_BRANCH = "automate"
@@ -27,14 +24,22 @@ def get_degrees_bbox_from_lat_lon_rad(
 
 
 def clean_string(text: str) -> str:
+    """Clean string from non-numeric symbols."""
     symbols = r"/[^\d.-]/g, ''"
-    new_text = text
+    text_part = text
     for s in symbols:
-        new_text = new_text.split(s)[0]  # .replace(s, "")
+        text_part = text_part.split(s)[0]
+
+    new_text = ""
+    for t in text_part:
+        if t in "0123456789.":
+            new_text += t
+
     return new_text
 
 
 def fill_list(vals: list, lsts: list) -> list[list]:
+    """Split values into separate lists by the repeated value."""
     if len(vals) > 1:
         lsts.append([])
     else:
@@ -47,5 +52,5 @@ def fill_list(vals: list, lsts: list) -> list[list]:
             if len(lsts[len(lsts) - 1]) <= 1:
                 lsts.pop(len(lsts) - 1)
             vals = copy(vals[i - 1 :])
-            fill_list(vals, lsts)
+            lsts = fill_list(vals, lsts)
     return lsts

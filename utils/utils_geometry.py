@@ -22,9 +22,15 @@ from utils.utils_other import (
 )
 
 
-def fix_orientation(point_tuple_list, vert_indices, positive=True, coef=1):
+def fix_orientation(
+    point_tuple_list: list,
+    vert_indices: list,
+    make_counter_clockwise: bool = True,
+    coef: int = 1,
+) -> tuple[list, bool]:
+    """Check the polygon face orientation and reverse if needed."""
     sum_orientation = 0
-    for k, ptt in enumerate(point_tuple_list):  # pointTupleList:
+    for k, _ in enumerate(point_tuple_list):  # pointTupleList:
         index = k + 1
         if k == len(point_tuple_list) - 1:
             index = 0
@@ -33,11 +39,15 @@ def fix_orientation(point_tuple_list, vert_indices, positive=True, coef=1):
 
         sum_orientation += (pt2[0] - pt[0]) * (pt2[1] + pt[1])
 
-    clockwise_orientation = True  # facing down originally
-    if sum_orientation < 0:
-        vert_indices.reverse()
-        clockwise_orientation = False  # facing up originally
-    return vert_indices, clockwise_orientation
+    if sum_orientation > 0:
+        original_clockwise_orientation = True  # facing down originally
+    else:
+        original_clockwise_orientation = False  # facing up originally
+        # if needs to be facing down, reverse the vertex order
+        if make_counter_clockwise:
+            vert_indices.reverse()
+
+    return vert_indices, original_clockwise_orientation
 
 
 def create_side_face(
@@ -59,7 +69,7 @@ def create_side_face(
             coords[i]["y"],
             height,
         ]
-    else:
+    else:  # if clockwise orientation
         side_vertices = [
             coords[i]["x"],
             coords[i]["y"],
@@ -78,7 +88,10 @@ def create_side_face(
     return side_vertices
 
 
-def to_triangles(coords: list[dict], coords_inner: list[dict], attempt=0):
+def to_triangles(
+    coords: list[dict], coords_inner: list[dict], attempt: int = 0
+) -> tuple[dict, int]:
+    """Generate triangular faces from the Polygon with voids."""
     # https://gis.stackexchange.com/questions/316697/delaunay-triangulation-algorithm-in-shapely-producing-erratic-result
     try:
         # round vertices precision
@@ -135,7 +148,7 @@ def to_triangles(coords: list[dict], coords_inner: list[dict], attempt=0):
             [item for sublist in poly_points for item in sublist]
         ).reshape(-1, 2)
 
-        poly_shapes, pts = voronoi_regions_from_coords(
+        poly_shapes, _ = voronoi_regions_from_coords(
             poly_points, polygon.buffer(0.000001)
         )
         gdf_poly_voronoi = (
@@ -174,7 +187,6 @@ def to_triangles(coords: list[dict], coords_inner: list[dict], attempt=0):
         shape = {"vertices": vertices, "triangles": triangles}
         return shape, attempt
     except Exception as e:
-        # raise e
         print(f"Meshing iteration {attempt} failed: {e}")
         attempt += 1
         if attempt <= 3:
@@ -183,7 +195,7 @@ def to_triangles(coords: list[dict], coords_inner: list[dict], attempt=0):
             return None, None
 
 
-def rotate_pt(coord: dict, angle: float) -> list[dict]:
+def rotate_pt(coord: dict, angle: float) -> dict:
     """Rotate a point around (0,0,1) axis."""
     x = coord["x"]
     y = coord["y"]
@@ -196,7 +208,7 @@ def rotate_pt(coord: dict, angle: float) -> list[dict]:
 def extrude_building(
     coords: list[dict], coords_inner: list[list[dict]], height: float
 ) -> Mesh:
-    """Creating 3d Speckle Mesh from the lists of outer and inner coords and height."""
+    """Create a 3d Mesh from the lists of outer and inner coords and height."""
     vertices = []
     faces = []
     colors = []
@@ -253,11 +265,11 @@ def extrude_building(
         try:
             total_vertices = 0
             triangulated_geom, _ = to_triangles(coords, coords_inner)
-        except Exception as e:
+        except Exception as e:  # default to only outer border mesh generation
             print(f"Mesh creation failed: {e}")
             return extrude_building(coords, [], height)
-            # raise e
-        if triangulated_geom is None:
+
+        if triangulated_geom is None:  # default to only outer border mesh generation
             return extrude_building(coords, [], height)
 
         pt_list = [[p[0], p[1], 0] for p in triangulated_geom["vertices"]]
@@ -272,13 +284,12 @@ def extrude_building(
             total_vertices += 3
 
             # all faces are counter-clockwise now (facing up)
-            # add vertices in the reverse (clock-wise) order (facing down)
+            # therefore, add vertices in the reverse (clockwise) order (facing down)
             faces.extend(
                 [3, total_vertices - 1, total_vertices - 2, total_vertices - 3]
             )
 
-        # a cap ##################################
-
+        # top
         pt_list = [[p[0], p[1], height] for p in triangulated_geom["vertices"]]
 
         for trg in triangle_list:
@@ -292,8 +303,6 @@ def extrude_building(
             faces.extend(
                 [3, total_vertices - 3, total_vertices - 2, total_vertices - 1]
             )
-
-        ###################################### add extrusions
 
         # sides
         bottom_vert_indices = list(range(len(coords)))
@@ -312,15 +321,13 @@ def extrude_building(
             side_vertices = create_side_face(
                 coords, i, next_coord_index, height, clockwise_orientation
             )
-            # if clockwise_orientation is True:  # if facing down originally
-            #    side_vertices.reverse()
 
             vertices.extend(side_vertices)
             colors.extend([color, color, color, color])
             total_vertices += 4
 
         # voids sides
-        for l, local_coords_inner in enumerate(coords_inner):
+        for _, local_coords_inner in enumerate(coords_inner):
             bottom_void_vert_indices = list(range(len(local_coords_inner)))
             bottom_void_vertices = [[c["x"], c["y"]] for c in local_coords_inner]
             bottom_void_vert_indices, clockwise_orientation_void = fix_orientation(
@@ -353,6 +360,7 @@ def extrude_building(
 
 
 def road_buffer(poly: Polyline, value: float) -> Base:
+    """Creage a Mesh from Polyline and buffer value."""
     if value is None:
         return
     line = LineString([(p.x, p.y) for p in poly.as_points()])
@@ -371,7 +379,7 @@ def road_buffer(poly: Polyline, value: float) -> Base:
             colors.append(color)
 
     face_list = list(range(len(vetricesTuples)))
-    face_list, inverse = fix_orientation(vetricesTuples, face_list)
+    face_list, _ = fix_orientation(vetricesTuples, face_list)
     face_list.reverse()
 
     mesh = Mesh.create(
@@ -389,6 +397,7 @@ def road_buffer(poly: Polyline, value: float) -> Base:
 
 
 def split_ways_by_intersection(ways: list[dict], tags: list[dict]) -> tuple[list[dict]]:
+    """Separate ways and tags into different lists if they self-intersect."""
     splitWays = []
     splitTags = []
 
@@ -417,13 +426,15 @@ def split_ways_by_intersection(ways: list[dict], tags: list[dict]) -> tuple[list
     return splitWays, splitTags
 
 
-def join_roads(coords: list[dict], closed: bool, height: float):
+def join_roads(coords: list[dict], closed: bool, height: float) -> Polyline:
+    """Create a Polyline from a list of coordinates."""
     points = []
 
-    for i, c in enumerate(coords):
+    for c in coords:
         points.append(Point.from_list([c["x"], c["y"], 0]))
 
     poly = Polyline.from_points(points)
     poly.closed = closed
     poly.units = "m"
+
     return poly

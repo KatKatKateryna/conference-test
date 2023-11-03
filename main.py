@@ -10,7 +10,6 @@ from speckle_automate import (
     AutomationContext,
     execute_automate_function,
 )
-from specklepy.objects import Base
 from specklepy.objects.other import Collection
 
 from utils.utils_osm import get_buildings, get_roads
@@ -62,24 +61,14 @@ def automate_function(
         angle_rad = -1 * projInfo["locations"][0]["trueNorth"]
 
         # get OSM buildings and roads in given area
-        building_meshes = get_buildings(
+        building_base_objects = get_buildings(
             lat, lon, function_inputs.radius_in_meters, angle_rad
         )
         roads_lines, roads_meshes = get_roads(
             lat, lon, function_inputs.radius_in_meters, angle_rad
         )
 
-        # turn Speckle Meshes into Base objects with additional attributes
-        building_base_objects = [
-            Base(
-                units="m",
-                displayValue=[b],
-                building=tag,
-                source_data="© OpenStreetMap",
-                source_url="https://www.openstreetmap.org/",
-            )
-            for b, tag in building_meshes
-        ]
+        # create layers for buildings and roads
         building_layer = Collection(
             elements=building_base_objects,
             units="m",
@@ -92,7 +81,7 @@ def automate_function(
             elements=roads_lines,
             units="m",
             name="Context",
-            collectionType="RoadsLayer",
+            collectionType="RoadLinesLayer",
             source_data="© OpenStreetMap",
             source_url="https://www.openstreetmap.org/",
         )
@@ -105,8 +94,8 @@ def automate_function(
             source_url="https://www.openstreetmap.org/",
         )
 
-        # add objects to a commit Collection object
-        commitObj = Collection(
+        # add layers to a commit Collection object
+        commit_obj = Collection(
             elements=[building_layer, roads_line_layer, roads_mesh_layer],
             units="m",
             name="Context",
@@ -117,7 +106,7 @@ def automate_function(
 
         # create a commit
         automate_context.create_new_version_in_project(
-            commitObj, RESULT_BRANCH, "Context from Automate"
+            commit_obj, RESULT_BRANCH, "Context from Automate"
         )
 
         # create and add a basemap png file
@@ -140,7 +129,7 @@ def automate_function_without_inputs(automate_context: AutomationContext) -> Non
 
 
 # make sure to call the function with the executor
-if __name__ == "__main__1111":
+if __name__ == "__main__":
     # NOTE: always pass in the automate function by its reference, do not invoke it!
 
     # pass in the function reference with the inputs schema to the executor
@@ -151,6 +140,9 @@ if __name__ == "__main__1111":
 
 ##########################################################################
 
+r"""
+# local testing
+
 from specklepy.api.credentials import get_local_accounts
 from specklepy.api.operations import send
 from specklepy.transports.server import ServerTransport
@@ -158,7 +150,7 @@ from specklepy.core.api.client import SpeckleClient
 
 lat = 51.500639115906935  # 52.52014  # 51.500639115906935
 lon = -0.12688576809010643  # 13.40371  # -0.12688576809010643
-radius_in_meters = 1000
+radius_in_meters = 100
 angle_rad = 1
 streamId = "8ef52c7aa7"
 
@@ -167,15 +159,49 @@ client = SpeckleClient(acc.serverInfo.url, acc.serverInfo.url.startswith("https"
 client.authenticate_with_account(acc)
 transport = ServerTransport(client=client, stream_id=streamId)
 
-blds = get_buildings(lat, lon, radius_in_meters, angle_rad)
-base_blds = [Base(units="m", displayValue=[b], building=tag) for b, tag in blds]
+#############################
 
-commit_obj = Collection(
-    elements=base_blds,
+# get OSM buildings and roads in given area
+building_base_objects = get_buildings(lat, lon, radius_in_meters, angle_rad)
+roads_lines, roads_meshes = get_roads(lat, lon, radius_in_meters, angle_rad)
+
+# create layers for buildings and roads
+building_layer = Collection(
+    elements=building_base_objects,
     units="m",
     name="Context",
     collectionType="BuildingsLayer",
+    source_data="© OpenStreetMap",
+    source_url="https://www.openstreetmap.org/",
 )
+roads_line_layer = Collection(
+    elements=roads_lines,
+    units="m",
+    name="Context",
+    collectionType="RoadLinesLayer",
+    source_data="© OpenStreetMap",
+    source_url="https://www.openstreetmap.org/",
+)
+roads_mesh_layer = Collection(
+    elements=roads_meshes,
+    units="m",
+    name="Context",
+    collectionType="RoadMeshesLayer",
+    source_data="© OpenStreetMap",
+    source_url="https://www.openstreetmap.org/",
+)
+
+# add layers to a commit Collection object
+commit_obj = Collection(
+    elements=[building_layer, roads_line_layer, roads_mesh_layer],
+    units="m",
+    name="Context",
+    collectionType="ContextLayer",
+    source_data="© OpenStreetMap",
+    source_url="https://www.openstreetmap.org/",
+)
+
+#################################
 objId = send(base=commit_obj, transports=[transport])
 commit_id = client.commit.create(
     stream_id=streamId,
@@ -188,3 +214,4 @@ commit_id = client.commit.create(
 
 path = create_image_from_bbox(lat, lon, radius_in_meters)
 print(path)
+"""
