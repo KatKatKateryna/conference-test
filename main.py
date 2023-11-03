@@ -72,23 +72,23 @@ def automate_function(
         building_layer = Collection(
             elements=building_base_objects,
             units="m",
-            name="Context",
-            collectionType="BuildingsLayer",
+            name="Context: Buildings",
+            collectionType="BuildingsMeshesLayer",
             source_data="© OpenStreetMap",
             source_url="https://www.openstreetmap.org/",
         )
         roads_line_layer = Collection(
             elements=roads_lines,
             units="m",
-            name="Context",
-            collectionType="RoadLinesLayer",
+            name="Context: Roads (Polylines)",
+            collectionType="RoadPolyinesLayer",
             source_data="© OpenStreetMap",
             source_url="https://www.openstreetmap.org/",
         )
         roads_mesh_layer = Collection(
             elements=roads_meshes,
             units="m",
-            name="Context",
+            name="Context: Roads (Meshes)",
             collectionType="RoadMeshesLayer",
             source_data="© OpenStreetMap",
             source_url="https://www.openstreetmap.org/",
