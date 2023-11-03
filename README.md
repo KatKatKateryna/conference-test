@@ -15,6 +15,9 @@ This functon will create a custom Coordinate Reference System based on Traverse 
 so that the size distortions of the real-world location are minimized. 3d geometries within specified radius will then be queried from 
 [OSM API service](https://wiki.openstreetmap.org/wiki/Overpass_API), and the information for the basemap will be queried from the [OSM raster tiles provider](https://wiki.openstreetmap.org/wiki/Raster_tile_providers). 
 
+Location info from Revit model (lat, lon, angle) will be derived from the following settings under the tab Manage->Location: 
+![Revit location settings](/assets/revit_location.PNG)
+
 
 ### Using this Speckle Function
 
