@@ -58,7 +58,10 @@ def automate_function(
 
         lon = np.rad2deg(projInfo["longitude"])
         lat = np.rad2deg(projInfo["latitude"])
-        angle_rad = -1 * projInfo["locations"][0]["trueNorth"]
+        try:
+            angle_rad = -1 * projInfo["locations"][0]["trueNorth"]
+        except:
+            angle_rad = 0
 
         # get OSM buildings and roads in given area
         building_base_objects = get_buildings(
