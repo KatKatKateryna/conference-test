@@ -59,7 +59,7 @@ def automate_function(
         lon = np.rad2deg(projInfo["longitude"])
         lat = np.rad2deg(projInfo["latitude"])
         try:
-            angle_rad = -1 * projInfo["locations"][0]["trueNorth"]
+            angle_rad = projInfo["locations"][0]["trueNorth"]
         except:
             angle_rad = 0
 
