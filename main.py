@@ -12,10 +12,12 @@ from speckle_automate import (
     execute_automate_function,
 )
 from specklepy.objects.other import Collection
+from specklepy.api.wrapper import StreamWrapper
 
 from utils.utils_osm import get_buildings, get_roads
 from utils.utils_other import RESULT_BRANCH
 from utils.utils_png import create_image_from_bbox
+from gql import gql
 
 
 class FunctionInputs(AutomateBase):
@@ -52,11 +54,60 @@ def automate_function(
     # the context provides a conveniet way, to receive the triggering version
     try:
         time_start = datetime.now()
-        base = automate_context.receive_version()
 
-        projInfo = base["info"]
-        if not projInfo.speckle_type.endswith("Revit.ProjectInfo"):
-            automate_context.mark_run_failed("Not a valid 'Revit.ProjectInfo' provided")
+        # get branch name
+        query = gql(
+            """
+            query Stream($project_id: String!, $model_id: String!, $version_id: String!) {
+                project(id:$project_id) {
+                    model(id: $model_id) {
+                        version(id: $version_id) {
+                            referencedObject
+                        }
+                    }
+                }
+            }
+        """
+        )
+        sw = StreamWrapper(
+            f"{automation_run_data.speckle_server_url}/projects/{automation_run_data.project_id}"
+        )
+        client = sw.get_client()
+        params = {
+            "project_id": automation_run_data.project_id,
+            "model_id": automation_run_data.model_id,
+            "version_id": automation_run_data.version_id,
+        }
+        project = client.httpclient.execute(query, params)
+        try:
+            ref_obj = project["project"]["model"]["version"]["referencedObject"]
+            # get Project Info
+            query = gql(
+                """
+                query Stream($project_id: String!, $ref_id: String!) {
+                    stream(id: $project_id){
+                        object(id: $ref_id){
+                        data
+                        }
+                    }
+                }
+            """
+            )
+            params = {
+                "project_id": automation_run_data.project_id,
+                "ref_id": ref_obj,
+            }
+            project = client.httpclient.execute(query, params)
+            projInfo = project["stream"]["object"]["data"]["info"]
+
+        except KeyError:
+            base = automate_context.receive_version()
+
+            projInfo = base["info"]
+            if not projInfo.speckle_type.endswith("Revit.ProjectInfo"):
+                automate_context.mark_run_failed(
+                    "Not a valid 'Revit.ProjectInfo' provided"
+                )
 
         lon = np.rad2deg(projInfo["longitude"])
         lat = np.rad2deg(projInfo["latitude"])
