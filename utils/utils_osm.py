@@ -1,3 +1,4 @@
+from datetime import datetime
 import requests
 from specklepy.objects import Base
 from specklepy.objects.geometry import Mesh
@@ -40,7 +41,11 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
 
     keyword = "building"
     min_lat_lon, max_lat_lon = get_degrees_bbox_from_lat_lon_rad(lat, lon, r)
+
+    time_start = datetime.now()
     features = get_features_from_osm_server(keyword, min_lat_lon, max_lat_lon)
+    time_end = datetime.now()
+    print(f"Buildings download time: {time_end- time_start}")
 
     ways = []
     tags = []
@@ -50,6 +55,7 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
     ways_part = []
     nodes = []
 
+    time_start_loops = datetime.now()
     for feature in features:
         # ways
         if feature["type"] == "way":
@@ -197,6 +203,12 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
 
     projected_crs = create_crs(lat, lon)
 
+    time_end_loops = datetime.now()
+    print(f"Buildings loops time: {time_end_loops- time_start_loops}")
+    time_extrusions = time_end_loops - time_end_loops
+    time_rotations = time_end_loops - time_end_loops
+    time_reproject_node = time_end_loops - time_end_loops
+
     # get coords of Ways
     objectGroup = []
     for i, x in enumerate(ways):
@@ -205,26 +217,30 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
         coords_inner = []
         height = 9
         try:
-            height = (
-                float(clean_string(tags[i]["levels"].split(",")[0].split(";")[0])) * 3
-            )
+            height = float(tags[i]["height"])
+            # height = float(
+            #        clean_string(tags[i]["height"].split(",")[0].split(";")[0])
+            #    )
         except:
             try:
-                height = float(
-                    clean_string(tags[i]["height"].split(",")[0].split(";")[0])
-                )
+                height = float(tags[i]["levels"]) * 3
+                # height = (
+                #    float(clean_string(tags[i]["levels"].split(",")[0].split(";")[0])) * 3
+                # )
             except:
                 try:
                     if (
-                        float(
-                            clean_string(tags[i]["layer"].split(",")[0].split(";")[0])
-                        )
+                        float(tags[i]["layer"])
+                        # float(
+                        #    clean_string(tags[i]["layer"].split(",")[0].split(";")[0])
+                        # )
                         < 0
                     ):
                         height *= -1
                 except:
                     pass
 
+        time_start_reproject = datetime.now()
         # go through each external node of the Way
         for k, y in enumerate(ids["nodes"]):
             if k == len(ids["nodes"]) - 1:
@@ -251,15 +267,25 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
                         coords_per_void.append({"x": x, "y": y})
                         break
             coords_inner.append(coords_per_void)
+        time_end_reproject = datetime.now()
+        time_reproject_node += time_end_reproject - time_start_reproject
 
         if angle_rad == 0:
             obj = extrude_building(coords, coords_inner, height)
         else:
+            time_start_rotate = datetime.now()
             rotated_coords = [rotate_pt(c, angle_rad) for c in coords]
             rotated_coords_inner = [
                 [rotate_pt(c_void, angle_rad) for c_void in c] for c in coords_inner
             ]
+            time_end_rotate = datetime.now()
+            time_start_extrude = datetime.now()
             obj = extrude_building(rotated_coords, rotated_coords_inner, height)
+            time_end_extrude = datetime.now()
+
+        time_extrusions += time_end_extrude - time_start_extrude
+        time_rotations += time_end_rotate - time_start_rotate
+
         if obj is not None:
             base_obj = Base(
                 units="m",
@@ -273,6 +299,13 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
         coords = None
         height = None
 
+    time_end2 = datetime.now()
+    print(f"Buildings reprojections time: {time_reproject_node}")
+    print(f"Buildings rotations time: {time_rotations}")
+    print(f"Buildings extrusions time: {time_extrusions}")
+
+    print(f"Buildings 2nd loops time: {time_end2- time_end_loops}")
+    print(f"Buildings total conversion time: {time_end2- time_end}")
     return objectGroup
 
 

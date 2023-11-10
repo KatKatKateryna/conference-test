@@ -3,6 +3,7 @@
 use the automation_context module to wrap your function in an Autamate context helper
 """
 
+from datetime import datetime
 import numpy as np
 from pydantic import Field
 from speckle_automate import (
@@ -50,6 +51,7 @@ def automate_function(
     """
     # the context provides a conveniet way, to receive the triggering version
     try:
+        time_start = datetime.now()
         base = automate_context.receive_version()
 
         projInfo = base["info"]
@@ -62,14 +64,14 @@ def automate_function(
             angle_rad = projInfo["locations"][0]["trueNorth"]
         except:
             angle_rad = 0
-        r'''
+
         # get OSM buildings and roads in given area
         building_base_objects = get_buildings(
             lat, lon, function_inputs.radius_in_meters, angle_rad
         )
-        roads_lines, roads_meshes = get_roads(
-            lat, lon, function_inputs.radius_in_meters, angle_rad
-        )
+        roads_lines, roads_meshes = [], []  # get_roads(
+        #    lat, lon, function_inputs.radius_in_meters, angle_rad
+        # )
 
         # create layers for buildings and roads
         building_layer = Collection(
@@ -109,14 +111,17 @@ def automate_function(
 
         # create a commit
         automate_context.create_new_version_in_project(
-            commit_obj, RESULT_BRANCH, "Context from Automate"
+            commit_obj, RESULT_BRANCH + "_local", "Context from Automate"
         )
-        '''
-        # create and add a basemap png file
-        path = create_image_from_bbox(lat, lon, function_inputs.radius_in_meters)
-        print(path)
-        automate_context.store_file_result(path)
 
+        # create and add a basemap png file
+        # print("Create 2d image")
+        # path = create_image_from_bbox(lat, lon, function_inputs.radius_in_meters)
+        # print(path)
+        # automate_context.store_file_result(path)
+
+        time_end = datetime.now()
+        print(f"Total time: {time_end - time_start}")
         automate_context.mark_run_success("Created 3D context")
     except Exception as ex:
         automate_context.mark_run_failed(f"Failed to create 3d context cause: {ex}")
@@ -152,8 +157,8 @@ from specklepy.transports.server import ServerTransport
 from pydantic import BaseModel, ConfigDict, Field
 from stringcase import camelcase
 
-project_id = "aeb6aa8a6c"
-radius_in_meters = 500
+project_id = "23c31c18f5"  # "aeb6aa8a6c"
+radius_in_meters = 50
 
 # get client
 account = get_local_accounts()[1]
@@ -165,9 +170,9 @@ server_transport = ServerTransport(project_id, client)
 # create automation run data
 automation_run_data = AutomationRunData(
     project_id=project_id,
-    model_id="02e4c63027",
+    model_id="3080ebb3c8",  # "02e4c63027",
     branch_name="main",
-    version_id="33e62b9536",
+    version_id="c26b96d649",  # "33e62b9536",
     speckle_server_url=account.serverInfo.url,
     automation_id="",
     automation_revision_id="",
@@ -184,7 +189,7 @@ automation_run_data = AutomationRunData(
 automate_context = AutomationContext(
     automation_run_data, speckle_client, server_transport, account.token
 )
-function_inputs = FunctionInputs(radius_in_meters=500)
+function_inputs = FunctionInputs(radius_in_meters=radius_in_meters)
 
 # execute_automate_function(automate_function, FunctionInputs)
 automate_function(automate_context, function_inputs)

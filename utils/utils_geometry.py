@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import math
 from copy import copy
@@ -97,6 +98,7 @@ def to_triangles(
         # round vertices precision
         digits = 3 - attempt
 
+        time_start_precision = datetime.now()
         vert = []
         vert_rounded = []
         # round boundary precision:
@@ -125,13 +127,18 @@ def to_triangles(
                     hole.append((v["x"], v["y"]))
                     holes_rounded.append(rounded)
             holes.append(hole)
+        # print(f"Precision{datetime.now() - time_start_precision}")
 
+        time_start_check_holes = datetime.now()
         # check if sufficient holes vertices were added
         if len(holes) == 1 and len(holes[0]) == 0:
             polygon = Polygon([(v[0], v[1]) for v in vert])
         else:
             polygon = Polygon([(v[0], v[1]) for v in vert], holes)
 
+        # print(f"Check holes: {datetime.now() - time_start_check_holes}")
+
+        time_start_get_arrays = datetime.now()
         exterior_linearring = polygon.exterior
         poly_points = np.array(exterior_linearring.coords).tolist()
 
@@ -148,14 +155,21 @@ def to_triangles(
             [item for sublist in poly_points for item in sublist]
         ).reshape(-1, 2)
 
+        # print(f"get arrays: {datetime.now() - time_start_get_arrays}")
+        time_start_voronoy = datetime.now()
+
         poly_shapes, _ = voronoi_regions_from_coords(
             poly_points, polygon.buffer(0.000001)
         )
+        print(f"voronoy1: {datetime.now() - time_start_voronoy}")
         gdf_poly_voronoi = (
             gpd.GeoDataFrame({"geometry": poly_shapes})
             .explode(index_parts=True)
             .reset_index()
         )
+
+        print(f"voronoy2: {datetime.now() - time_start_voronoy}")
+        time_triangle = datetime.now()
 
         tri_geom = []
         for geom in gdf_poly_voronoi.geometry:
@@ -163,6 +177,8 @@ def to_triangles(
                 tri for tri in triangulate(geom) if tri.centroid.within(polygon)
             ]
             tri_geom += inside_triangles
+
+        # print(f"triangle: {datetime.now() - time_triangle}")
 
         vertices = []
         triangles = []
@@ -209,6 +225,10 @@ def extrude_building(
     coords: list[dict], coords_inner: list[list[dict]], height: float
 ) -> Mesh:
     """Create a 3d Mesh from the lists of outer and inner coords and height."""
+
+    TOTAL_TIME1 = datetime.now() - datetime.now()
+    TOTAL_TIME2 = datetime.now() - datetime.now()
+
     vertices = []
     faces = []
     colors = []
@@ -218,6 +238,7 @@ def extrude_building(
     if len(coords) < 3:
         return None
     # if the building has single outline
+    time_start = datetime.now()
     if len(coords_inner) == 0:
         # bottom
         bottom_vert_indices = list(range(len(coords)))
@@ -259,12 +280,14 @@ def extrude_building(
             vertices.extend(side_vertices)
             colors.extend([color, color, color, color])
             total_vertices += 4
-
+        TOTAL_TIME1 += datetime.now() - time_start
     else:  # if outline contains holes and mesh needs to be constructed
         # bottom
         try:
             total_vertices = 0
+            time_start_triang = datetime.now()
             triangulated_geom, _ = to_triangles(coords, coords_inner)
+            # print(datetime.now() - time_start_triang)
         except Exception as e:  # default to only outer border mesh generation
             print(f"Mesh creation failed: {e}")
             return extrude_building(coords, [], height)
@@ -352,8 +375,14 @@ def extrude_building(
                 vertices.extend(side_vertices)
                 colors.extend([color, color, color, color])
                 total_vertices += 4
+        TOTAL_TIME2 += datetime.now() - time_start
 
+    time_mesh_start = datetime.now()
     obj = Mesh.create(faces=faces, vertices=vertices, colors=colors)
+    TOTAL_TIME_mesh = datetime.now() - time_mesh_start
+
+    # print(f"bld: {TOTAL_TIME1}, bld_voids: {TOTAL_TIME2}, meshes: {TOTAL_TIME_mesh}")
+
     obj.units = "m"
 
     return obj
