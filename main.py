@@ -30,7 +30,7 @@ class FunctionInputs(AutomateBase):
 
     radius_in_meters: float = Field(
         title="Radius in meters",
-        ge=50,
+        ge=5,
         le=1000,
         description=(
             "Radius from the Model location," " derived from Revit model lat, lon."
@@ -54,7 +54,7 @@ def automate_function(
     # the context provides a conveniet way, to receive the triggering version
     try:
         time_start = datetime.now()
-
+        automation_run_data = automate_context.automation_run_data
         # get branch name
         query = gql(
             """
@@ -205,11 +205,13 @@ from specklepy.api.credentials import get_local_accounts
 from specklepy.core.api.client import SpeckleClient
 from speckle_automate.schema import AutomationRunData
 from specklepy.transports.server import ServerTransport
+from specklepy.api.models import Branch
 from pydantic import BaseModel, ConfigDict, Field
 from stringcase import camelcase
 
 project_id = "23c31c18f5"  # "aeb6aa8a6c"
-radius_in_meters = 50
+model_id = "3080ebb3c8"
+radius_in_meters = 5
 
 # get client
 account = get_local_accounts()[1]
@@ -218,12 +220,15 @@ client.authenticate_with_token(account.token)
 speckle_client: SpeckleClient = client
 server_transport = ServerTransport(project_id, client)
 
+branch: Branch = client.branch.get(project_id, model_id, 1)
+version_id = branch.commits.items[0].id
+
 # create automation run data
 automation_run_data = AutomationRunData(
     project_id=project_id,
-    model_id="3080ebb3c8",  # "02e4c63027",
+    model_id=model_id,  # "02e4c63027",
     branch_name="main",
-    version_id="c26b96d649",  # "33e62b9536",
+    version_id=version_id,  # "c26b96d649",  # "33e62b9536",
     speckle_server_url=account.serverInfo.url,
     automation_id="",
     automation_revision_id="",
