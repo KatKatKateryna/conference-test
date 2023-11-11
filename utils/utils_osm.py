@@ -156,11 +156,27 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
             for k, z in enumerate(ways_part):
                 if k == len(ways_part):
                     break
+
                 if rel_outer_ways[n][m]["ref"] == ways_part[k]["id"]:
-                    full_node_list += ways_part[k]["nodes"]
+                    # reverse way part is needed
+                    node_list = ways_part[k]["nodes"].copy()
+                    if (
+                        len(full_node_list) > 0
+                        and full_node_list[len(full_node_list) - 1]
+                        == node_list[len(node_list) - 1]
+                    ):
+                        node_list.reverse()
+                    node_list = [
+                        n
+                        for j, n in enumerate(node_list)
+                        if (n not in full_node_list or j == len(node_list) - 1)
+                    ]
+
+                    full_node_list += node_list
                     ways_part.pop(k)  # remove used ways_parts
                     k -= 1  # reset index
                     break
+
         for m, y in enumerate(rel_inner_ways[n]):
             # find ways_parts with corresponding ID
             local_node_list = []
@@ -168,7 +184,21 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
                 if k == len(ways_part):
                     break
                 if rel_inner_ways[n][m]["ref"] == ways_part[k]["id"]:
-                    local_node_list += ways_part[k]["nodes"]
+                    # reverse way part is needed
+                    node_list = ways_part[k]["nodes"].copy()
+                    if (
+                        len(local_node_list) > 0
+                        and local_node_list[len(local_node_list) - 1]
+                        == node_list[len(node_list) - 1]
+                    ):
+                        node_list.reverse()
+                    node_list = [
+                        n
+                        for j, n in enumerate(node_list)
+                        if (n not in local_node_list or j == len(node_list) - 1)
+                    ]
+
+                    local_node_list += node_list  # ways_part[k]["nodes"]
                     ways_part.pop(k)  # remove used ways_parts
                     k -= 1  # reset index
                     break
@@ -217,23 +247,22 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
         coords_inner = []
         height = 9
         try:
-            height = float(tags[i]["height"])
-            # height = float(
-            #        clean_string(tags[i]["height"].split(",")[0].split(";")[0])
-            #    )
+            # height = float(tags[i]["height"])
+            height = float(clean_string(tags[i]["height"].split(",")[0].split(";")[0]))
         except:
             try:
-                height = float(tags[i]["levels"]) * 3
-                # height = (
-                #    float(clean_string(tags[i]["levels"].split(",")[0].split(";")[0])) * 3
-                # )
+                # height = float(tags[i]["levels"]) * 3
+                height = (
+                    float(clean_string(tags[i]["levels"].split(",")[0].split(";")[0]))
+                    * 3
+                )
             except:
                 try:
                     if (
-                        float(tags[i]["layer"])
-                        # float(
-                        #    clean_string(tags[i]["layer"].split(",")[0].split(";")[0])
-                        # )
+                        # float(tags[i]["layer"])
+                        float(
+                            clean_string(tags[i]["layer"].split(",")[0].split(";")[0])
+                        )
                         < 0
                     ):
                         height *= -1
@@ -242,7 +271,7 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
 
         time_start_reproject = datetime.now()
         # go through each external node of the Way
-        for k, y in enumerate(ids["nodes"]):
+        for k, _ in enumerate(ids["nodes"]):
             if k == len(ids["nodes"]) - 1:
                 continue  # ignore last
             for n, z in enumerate(nodes):  # go though all nodes
@@ -256,7 +285,7 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
         # go through each internal node of the Way
         for l, void_nodes in enumerate(ids["inner_nodes"]):
             coords_per_void = []
-            for k, y in enumerate(void_nodes):
+            for k, node_list in enumerate(void_nodes):
                 if k == len(ids["inner_nodes"][l]) - 1:
                     continue  # ignore last
                 for n, z in enumerate(nodes):  # go though all nodes
@@ -398,7 +427,12 @@ def get_roads(lat: float, lon: float, r: float, angle_rad: float) -> tuple[list[
     objectGroup = []
     meshGroup = []
 
+    time_intersect = datetime.now()
     ways, tags = split_ways_by_intersection(ways, tags)
+    print(f"Time intersect roads:{datetime.now() - time_intersect}")
+
+    time_buffer = datetime.now() - datetime.now()
+    time_join = datetime.now() - datetime.now()
 
     for i, x in enumerate(ways):  # go through each Way: 2384
         ids = ways[i]["nodes"]
@@ -429,6 +463,7 @@ def get_roads(lat: float, lon: float, r: float, angle_rad: float) -> tuple[list[
                     coords.append({"x": x, "y": y})
                     break
 
+        before_join = datetime.now()
         if angle_rad == 0:
             obj = join_roads(coords, closed, 0)
         else:
@@ -436,8 +471,14 @@ def get_roads(lat: float, lon: float, r: float, angle_rad: float) -> tuple[list[
             obj = join_roads(rotated_coords, closed, 0)
         objectGroup.append(obj)
 
+        time_join += datetime.now() - before_join
+        before_buffer = datetime.now()
+
         objMesh = road_buffer(obj, value)
         if objMesh is not None:  # filter out ignored "areas"
             meshGroup.append(objMesh)
+        time_buffer += datetime.now() - before_buffer
 
+    print(f"Time join roads:{time_join}")
+    print(f"Time buffer roads:{time_buffer}")
     return objectGroup, meshGroup

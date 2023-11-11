@@ -120,9 +120,9 @@ def automate_function(
         building_base_objects = get_buildings(
             lat, lon, function_inputs.radius_in_meters, angle_rad
         )
-        roads_lines, roads_meshes = [], []  # get_roads(
-        #    lat, lon, function_inputs.radius_in_meters, angle_rad
-        # )
+        roads_lines, roads_meshes = get_roads(
+            lat, lon, function_inputs.radius_in_meters, angle_rad
+        )
 
         # create layers for buildings and roads
         building_layer = Collection(
@@ -133,6 +133,7 @@ def automate_function(
             source_data="© OpenStreetMap",
             source_url="https://www.openstreetmap.org/",
         )
+        r"""
         roads_line_layer = Collection(
             elements=roads_lines,
             units="m",
@@ -141,6 +142,7 @@ def automate_function(
             source_data="© OpenStreetMap",
             source_url="https://www.openstreetmap.org/",
         )
+        """
         roads_mesh_layer = Collection(
             elements=roads_meshes,
             units="m",
@@ -152,7 +154,7 @@ def automate_function(
 
         # add layers to a commit Collection object
         commit_obj = Collection(
-            elements=[building_layer, roads_line_layer, roads_mesh_layer],
+            elements=[building_layer, roads_mesh_layer],
             units="m",
             name="Context",
             collectionType="ContextLayer",
@@ -166,8 +168,10 @@ def automate_function(
         )
 
         # create and add a basemap png file
+        time_start_img = datetime.now()
         # print("Create 2d image")
         # path = create_image_from_bbox(lat, lon, function_inputs.radius_in_meters)
+        # print(datetime.now() - time_start_img)
         # print(path)
         # automate_context.store_file_result(path)
 
@@ -211,7 +215,7 @@ from stringcase import camelcase
 
 project_id = "23c31c18f5"  # "aeb6aa8a6c"
 model_id = "3080ebb3c8"
-radius_in_meters = 5
+radius_in_meters = 200
 
 # get client
 account = get_local_accounts()[1]

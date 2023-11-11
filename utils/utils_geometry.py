@@ -139,7 +139,12 @@ def to_triangles(
         # print(f"Check holes: {datetime.now() - time_start_check_holes}")
 
         time_start_get_arrays = datetime.now()
-        exterior_linearring = polygon.exterior
+        # exterior_linearring = polygon.exterior
+        try:
+            exterior_linearring = polygon.buffer(-0.001).exterior
+        except AttributeError:
+            exterior_linearring = polygon.buffer(-0.0001).exterior
+
         poly_points = np.array(exterior_linearring.coords).tolist()
 
         try:
@@ -158,17 +163,18 @@ def to_triangles(
         # print(f"get arrays: {datetime.now() - time_start_get_arrays}")
         time_start_voronoy = datetime.now()
 
-        poly_shapes, _ = voronoi_regions_from_coords(
-            poly_points, polygon.buffer(0.000001)
-        )
-        print(f"voronoy1: {datetime.now() - time_start_voronoy}")
+        poly_shapes, _ = voronoi_regions_from_coords(poly_points, polygon.buffer(0))
+        # print(poly_shapes)
+        # print(f"voronoy1: {datetime.now() - time_start_voronoy}")
+        # time_start_voronoy2 = datetime.now()
         gdf_poly_voronoi = (
             gpd.GeoDataFrame({"geometry": poly_shapes})
             .explode(index_parts=True)
             .reset_index()
         )
+        # print(gdf_poly_voronoi.geometry)
 
-        print(f"voronoy2: {datetime.now() - time_start_voronoy}")
+        # print(f"voronoy2: {datetime.now() - time_start_voronoy2}")
         time_triangle = datetime.now()
 
         tri_geom = []
@@ -221,6 +227,64 @@ def rotate_pt(coord: dict, angle: float) -> dict:
     return {"x": x2, "y": y2}
 
 
+def extrude_building_simple(
+    coords: list[dict], coords_inner: list[list[dict]], height: float
+) -> Mesh:
+    """Create a 3d Mesh from the lists of outer and inner coords and height."""
+
+    vertices = []
+    faces = []
+    colors = []
+
+    color = COLOR_BLD  # (255<<24) + (100<<16) + (100<<8) + 100 # argb
+
+    if len(coords) < 3:
+        return None
+
+    # bottom
+    bottom_vert_indices = list(range(len(coords)))
+    bottom_vertices = [[c["x"], c["y"]] for c in coords]
+    bottom_vert_indices, clockwise_orientation = fix_orientation(
+        bottom_vertices, bottom_vert_indices
+    )
+    for c in coords:
+        vertices.extend([c["x"], c["y"], 0])
+        colors.append(color)
+    faces.extend([len(coords)] + bottom_vert_indices)
+
+    # top
+    top_vert_indices = list(range(len(coords), 2 * len(coords)))
+    for c in coords:
+        vertices.extend([c["x"], c["y"], height])
+        colors.append(color)
+
+    if clockwise_orientation is True:  # if facing down originally
+        top_vert_indices.reverse()
+    faces.extend([len(coords)] + top_vert_indices)
+
+    # sides
+    total_vertices = len(colors)
+    for i, c in enumerate(coords):
+        if i != len(coords) - 1:
+            next_coord_index = coords[i + 1]
+        else:
+            next_coord_index = coords[0]  # 0
+
+        side_vert_indices = list(range(total_vertices, total_vertices + 4))
+        faces.extend([4] + side_vert_indices)
+        side_vertices = create_side_face(
+            coords, i, next_coord_index, height, clockwise_orientation
+        )
+        vertices.extend(side_vertices)
+        colors.extend([color, color, color, color])
+        total_vertices += 4
+
+    obj = Mesh.create(faces=faces, vertices=vertices, colors=colors)
+    obj.units = "m"
+
+    return obj
+
+
 def extrude_building(
     coords: list[dict], coords_inner: list[list[dict]], height: float
 ) -> Mesh:
@@ -239,149 +303,102 @@ def extrude_building(
         return None
     # if the building has single outline
     time_start = datetime.now()
-    if len(coords_inner) == 0:
-        # bottom
-        bottom_vert_indices = list(range(len(coords)))
-        bottom_vertices = [[c["x"], c["y"]] for c in coords]
-        bottom_vert_indices, clockwise_orientation = fix_orientation(
-            bottom_vertices, bottom_vert_indices
+    # if len(coords_inner) < 0:
+    # else:  # if outline contains holes and mesh needs to be constructed
+    # bottom
+    try:
+        total_vertices = 0
+        time_start_triang = datetime.now()
+        triangulated_geom, _ = to_triangles(coords, coords_inner)
+        # print(datetime.now() - time_start_triang)
+    except Exception as e:  # default to only outer border mesh generation
+        print(f"Mesh creation failed: {e}")
+        return extrude_building_simple(coords, [], height)
+
+    if triangulated_geom is None:  # default to only outer border mesh generation
+        return extrude_building_simple(coords, [], height)
+
+    pt_list = [[p[0], p[1], 0] for p in triangulated_geom["vertices"]]
+    triangle_list = [trg for trg in triangulated_geom["triangles"]]
+
+    for trg in triangle_list:
+        a = trg[0]
+        b = trg[1]
+        c = trg[2]
+        vertices.extend(pt_list[a] + pt_list[b] + pt_list[c])
+        colors.extend([color, color, color])
+        total_vertices += 3
+
+        # all faces are counter-clockwise now (facing up)
+        # therefore, add vertices in the reverse (clockwise) order (facing down)
+        faces.extend([3, total_vertices - 1, total_vertices - 2, total_vertices - 3])
+
+    # top
+    pt_list = [[p[0], p[1], height] for p in triangulated_geom["vertices"]]
+
+    for trg in triangle_list:
+        a = trg[0]
+        b = trg[1]
+        c = trg[2]
+        # all faces are counter-clockwise now (facing up)
+        vertices.extend(pt_list[a] + pt_list[b] + pt_list[c])
+        colors.extend([color, color, color])
+        total_vertices += 3
+        faces.extend([3, total_vertices - 3, total_vertices - 2, total_vertices - 1])
+
+    # sides
+    bottom_vert_indices = list(range(len(coords)))
+    bottom_vertices = [[c["x"], c["y"]] for c in coords]
+    bottom_vert_indices, clockwise_orientation = fix_orientation(
+        bottom_vertices, bottom_vert_indices
+    )
+    for i, c in enumerate(coords):
+        if i != len(coords) - 1:
+            next_coord_index = coords[i + 1]
+        else:
+            next_coord_index = coords[0]  # 0
+
+        side_vert_indices = list(range(total_vertices, total_vertices + 4))
+        faces.extend([4] + side_vert_indices)
+        side_vertices = create_side_face(
+            coords, i, next_coord_index, height, clockwise_orientation
         )
-        for c in coords:
-            vertices.extend([c["x"], c["y"], 0])
-            colors.append(color)
-        faces.extend([len(coords)] + bottom_vert_indices)
 
-        # top
-        top_vert_indices = list(range(len(coords), 2 * len(coords)))
-        for c in coords:
-            vertices.extend([c["x"], c["y"], height])
-            colors.append(color)
+        vertices.extend(side_vertices)
+        colors.extend([color, color, color, color])
+        total_vertices += 4
 
-        if clockwise_orientation is True:  # if facing down originally
-            top_vert_indices.reverse()
-        faces.extend([len(coords)] + top_vert_indices)
+    # voids sides
+    for _, local_coords_inner in enumerate(coords_inner):
+        bottom_void_vert_indices = list(range(len(local_coords_inner)))
+        bottom_void_vertices = [[c["x"], c["y"]] for c in local_coords_inner]
+        bottom_void_vert_indices, clockwise_orientation_void = fix_orientation(
+            bottom_void_vertices, bottom_void_vert_indices
+        )
 
-        # sides
-        total_vertices = len(colors)
-        for i, c in enumerate(coords):
-            if i != len(coords) - 1:
-                next_coord_index = coords[i + 1]
+        for i, c in enumerate(local_coords_inner):
+            if i != len(local_coords_inner) - 1:
+                next_coord_index = local_coords_inner[i + 1]
             else:
-                next_coord_index = coords[0]  # 0
+                next_coord_index = local_coords_inner[0]  # 0
 
             side_vert_indices = list(range(total_vertices, total_vertices + 4))
             faces.extend([4] + side_vert_indices)
             side_vertices = create_side_face(
-                coords, i, next_coord_index, height, clockwise_orientation
+                local_coords_inner,
+                i,
+                next_coord_index,
+                height,
+                clockwise_orientation_void,
             )
-            # if clockwise_orientation is True:  # if facing down originally
-            #    side_vertices.reverse()
-
             vertices.extend(side_vertices)
             colors.extend([color, color, color, color])
             total_vertices += 4
-        TOTAL_TIME1 += datetime.now() - time_start
-    else:  # if outline contains holes and mesh needs to be constructed
-        # bottom
-        try:
-            total_vertices = 0
-            time_start_triang = datetime.now()
-            triangulated_geom, _ = to_triangles(coords, coords_inner)
-            # print(datetime.now() - time_start_triang)
-        except Exception as e:  # default to only outer border mesh generation
-            print(f"Mesh creation failed: {e}")
-            return extrude_building(coords, [], height)
-
-        if triangulated_geom is None:  # default to only outer border mesh generation
-            return extrude_building(coords, [], height)
-
-        pt_list = [[p[0], p[1], 0] for p in triangulated_geom["vertices"]]
-        triangle_list = [trg for trg in triangulated_geom["triangles"]]
-
-        for trg in triangle_list:
-            a = trg[0]
-            b = trg[1]
-            c = trg[2]
-            vertices.extend(pt_list[a] + pt_list[b] + pt_list[c])
-            colors.extend([color, color, color])
-            total_vertices += 3
-
-            # all faces are counter-clockwise now (facing up)
-            # therefore, add vertices in the reverse (clockwise) order (facing down)
-            faces.extend(
-                [3, total_vertices - 1, total_vertices - 2, total_vertices - 3]
-            )
-
-        # top
-        pt_list = [[p[0], p[1], height] for p in triangulated_geom["vertices"]]
-
-        for trg in triangle_list:
-            a = trg[0]
-            b = trg[1]
-            c = trg[2]
-            # all faces are counter-clockwise now (facing up)
-            vertices.extend(pt_list[a] + pt_list[b] + pt_list[c])
-            colors.extend([color, color, color])
-            total_vertices += 3
-            faces.extend(
-                [3, total_vertices - 3, total_vertices - 2, total_vertices - 1]
-            )
-
-        # sides
-        bottom_vert_indices = list(range(len(coords)))
-        bottom_vertices = [[c["x"], c["y"]] for c in coords]
-        bottom_vert_indices, clockwise_orientation = fix_orientation(
-            bottom_vertices, bottom_vert_indices
-        )
-        for i, c in enumerate(coords):
-            if i != len(coords) - 1:
-                next_coord_index = coords[i + 1]
-            else:
-                next_coord_index = coords[0]  # 0
-
-            side_vert_indices = list(range(total_vertices, total_vertices + 4))
-            faces.extend([4] + side_vert_indices)
-            side_vertices = create_side_face(
-                coords, i, next_coord_index, height, clockwise_orientation
-            )
-
-            vertices.extend(side_vertices)
-            colors.extend([color, color, color, color])
-            total_vertices += 4
-
-        # voids sides
-        for _, local_coords_inner in enumerate(coords_inner):
-            bottom_void_vert_indices = list(range(len(local_coords_inner)))
-            bottom_void_vertices = [[c["x"], c["y"]] for c in local_coords_inner]
-            bottom_void_vert_indices, clockwise_orientation_void = fix_orientation(
-                bottom_void_vertices, bottom_void_vert_indices
-            )
-
-            for i, c in enumerate(local_coords_inner):
-                if i != len(local_coords_inner) - 1:
-                    next_coord_index = local_coords_inner[i + 1]
-                else:
-                    next_coord_index = local_coords_inner[0]  # 0
-
-                side_vert_indices = list(range(total_vertices, total_vertices + 4))
-                faces.extend([4] + side_vert_indices)
-                side_vertices = create_side_face(
-                    local_coords_inner,
-                    i,
-                    next_coord_index,
-                    height,
-                    clockwise_orientation_void,
-                )
-                vertices.extend(side_vertices)
-                colors.extend([color, color, color, color])
-                total_vertices += 4
-        TOTAL_TIME2 += datetime.now() - time_start
+    TOTAL_TIME2 += datetime.now() - time_start
 
     time_mesh_start = datetime.now()
     obj = Mesh.create(faces=faces, vertices=vertices, colors=colors)
     TOTAL_TIME_mesh = datetime.now() - time_mesh_start
-
-    # print(f"bld: {TOTAL_TIME1}, bld_voids: {TOTAL_TIME2}, meshes: {TOTAL_TIME_mesh}")
 
     obj.units = "m"
 
@@ -441,7 +458,8 @@ def split_ways_by_intersection(ways: list[dict], tags: list[dict]) -> tuple[list
         except:
             pass
 
-        if len(list(set(ids))) < len(ids):  # if there are repetitions
+        x = set(ids)
+        if len(ids) == 0 or len(list(set(ids))) < len(ids):  # if there are repetitions
             wList = fill_list(ids, [])
             for item in wList:
                 x = copy(w)
@@ -465,5 +483,7 @@ def join_roads(coords: list[dict], closed: bool, height: float) -> Polyline:
     poly = Polyline.from_points(points)
     poly.closed = closed
     poly.units = "m"
+    poly.source_data = ("© OpenStreetMap",)
+    poly.source_url = ("https://www.openstreetmap.org/",)
 
     return poly
