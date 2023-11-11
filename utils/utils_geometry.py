@@ -236,7 +236,7 @@ def create_flat_mesh(coords: list[dict], color=None) -> Mesh:
     faces = []
     colors = []
     if color is None:  # apply green
-        color = (255 << 24) + (30 << 16) + (100 << 8) + 5  # argb
+        color = (255 << 24) + (20 << 16) + (50 << 8) + 7  # argb
 
     # bottom
     bottom_vert_indices = list(range(len(coords)))
@@ -448,7 +448,7 @@ def extrude_building_complex(
     return obj
 
 
-def road_buffer(poly: Polyline, value: float) -> Base:
+def road_buffer(poly: Polyline, value: float, elevation: float = 0.01) -> Base:
     """Creage a Mesh from Polyline and buffer value."""
     if value is None:
         return
@@ -463,7 +463,7 @@ def road_buffer(poly: Polyline, value: float) -> Base:
 
     for i, c in enumerate(area["coordinates"][0]):
         if i != len(area["coordinates"][0]) - 1:
-            vertices.extend(c + [0])
+            vertices.extend(c + [0 + elevation])
             vetricesTuples.append(c)
             colors.append(color)
 

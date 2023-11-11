@@ -532,8 +532,7 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
                         }
                     )
                 except:
-                    pass
-                    # ways_part.append({"id": feature["id"], "nodes": feature["nodes"]})
+                    ways_part.append({"id": feature["id"], "nodes": feature["nodes"]})
 
             # relations
             elif feature["type"] == "relation":
@@ -656,14 +655,19 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
             time_rotations += time_end_rotate - time_start_rotate
 
             if obj is not None:
-                base_obj = Base(
-                    units="m",
-                    displayValue=[obj],
-                    keyword=tags[i][keyword],
-                    source_data="© OpenStreetMap",
-                    source_url="https://www.openstreetmap.org/",
-                )
-                objectGroup.append(base_obj)  # (obj, tags[i]["building"]))
+                for keyword in all_keywords:
+                    try:  # iterate through keywords
+                        base_obj = Base(
+                            units="m",
+                            displayValue=[obj],
+                            keyword=tags[i][keyword],
+                            source_data="© OpenStreetMap",
+                            source_url="https://www.openstreetmap.org/",
+                        )
+                        objectGroup.append(base_obj)  # (obj, tags[i]["building"]))
+                        break
+                    except:
+                        pass
 
             coords = None
 
