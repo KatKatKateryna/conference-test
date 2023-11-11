@@ -511,6 +511,7 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
         all_landuse_polygons + all_natural_polygons + all_leisure_polygons
     )
     trees_nodes = []  # natural: tree, natural: tree_row,
+    tree_rows = []
 
     time_start_loops = datetime.now()
     objectGroup = []
@@ -520,6 +521,9 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
             # ways
             if feature["type"] == "way":
                 try:
+                    if feature["tags"][keyword] == "tree_row":
+                        tree_rows.append({"nodes": feature["nodes"]})
+
                     if feature["tags"][keyword] not in all_green_polygons:
                         continue
                     feature["id"]
@@ -628,8 +632,7 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
         time_rotations = time_end_loops - time_end_loops
         time_reproject_node = time_end_loops - time_end_loops
 
-        # get coords of Ways
-
+        # get coords of Ways - polygons
         for i, x in enumerate(ways):
             ids = ways[i]
             coords = []  # replace node IDs with actual coords for each Way
@@ -667,19 +670,36 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
                         break
                     except:
                         pass
-
             coords = None
+
+        # get coords of Ways - tree rows
+        for i, ids in enumerate(tree_rows):
+            coords_tree_row = []  # replace node IDs with actual coords for each Way
+            # go through each node of the Way
+            for k, _ in enumerate(ids["nodes"]):
+                for n, z in enumerate(nodes):  # go though all nodes
+                    if ids["nodes"][k] == nodes[n]["id"]:
+                        new_item = {
+                            "id": nodes[n]["id"],
+                            "y": nodes[n]["lat"],
+                            "x": nodes[n]["lon"],
+                        }
+                        #if new_item not in coords_tree_row:
+                        coords_tree_row.append(new_item)
+                        #break
+
+            for w, pt in enumerate(coords_tree_row):
+                trees_nodes.append({"id": pt["id"], "lon": pt["x"], "lat": pt["y"]})
+
     # generate trees:
     for tree in trees_nodes:
-        x, y = reproject_to_crs(
-            tree["lat"], tree["lon"], "EPSG:4326", projected_crs
-        )
+        x, y = reproject_to_crs(tree["lat"], tree["lon"], "EPSG:4326", projected_crs)
         coords_tree = {"x": x, "y": y}
 
         if angle_rad == 0:
             obj = generate_tree(tree, coords_tree)
         else:
-            rotated_coords = rotate_pt(coords_tree, angle_rad) 
+            rotated_coords = rotate_pt(coords_tree, angle_rad)
             obj = generate_tree(tree, rotated_coords)
 
         if obj is not None:

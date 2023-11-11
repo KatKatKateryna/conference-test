@@ -534,25 +534,28 @@ def join_roads(coords: list[dict], closed: bool, height: float) -> Polyline:
 
 def generate_tree(tree: dict, coords: dict) -> Mesh():
     """Create a 3d tree in a given location."""
+    obj = None
+    try:
+        vertices = []
+        faces = []
+        colors = []
+        # if color is None:  # apply green
+        color = (255 << 24) + (20 << 16) + (250 << 8) + 7  # argb
+        all_coords = []
 
-    vertices = []
-    faces = []
-    colors = []
-    # if color is None:  # apply green
-    color = (255 << 24) + (20 << 16) + (250 << 8) + 7  # argb
-    all_coords = []
+        all_coords.append([coords["x"], coords["y"], 0])
+        all_coords.append([coords["x"], coords["y"], 10])
+        all_coords.append([coords["x"] + 3, coords["y"], 10])
+        all_coords.append([coords["x"] + 3, coords["y"], 0])
 
-    all_coords.append([coords["x"], coords["y"], 0])
-    all_coords.append([coords["x"], coords["y"], 10])
-    all_coords.append([coords["x"] + 3, coords["y"], 10])
-    all_coords.append([coords["x"] + 3, coords["y"], 0])
+        for c in all_coords:
+            vertices.extend([c[0], c[1], c[2]])
+            colors.append(color)
+        faces.extend([len(all_coords)] + list(range(len(all_coords))))
 
-    for c in all_coords:
-        vertices.extend([c[0], c[1], c[2]])
-        colors.append(color)
-    faces.extend([len(all_coords)] + list(range(len(all_coords))))
-
-    obj = Mesh.create(faces=faces, vertices=vertices, colors=colors)
-    obj.units = "m"
+        obj = Mesh.create(faces=faces, vertices=vertices, colors=colors)
+        obj.units = "m"
+    except:
+        pass
 
     return obj
