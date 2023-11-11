@@ -172,7 +172,8 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
                     ]
 
                     full_node_list += node_list
-                    ways_part.pop(k)  # remove used ways_parts
+                    item = ways_part.pop(k)  # remove used ways_parts
+                    ways_part.append(item)
                     k -= 1  # reset index
                     break
 
@@ -197,7 +198,8 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
                     ]
 
                     local_node_list += node_list  # ways_part[k]["nodes"]
-                    ways_part.pop(k)  # remove used ways_parts
+                    item = ways_part.pop(k)  # remove used ways_parts
+                    ways_part.append(item)
                     k -= 1  # reset index
                     break
             full_node_inner_list.append(local_node_list)
