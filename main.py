@@ -117,9 +117,9 @@ def automate_function(
             angle_rad = 0
 
         # get OSM buildings and roads in given area
-        building_base_objects = get_buildings(
-            lat, lon, function_inputs.radius_in_meters, angle_rad
-        )
+        building_base_objects = []  # get_buildings(
+        #    lat, lon, function_inputs.radius_in_meters, angle_rad
+        # )
         roads_lines, roads_meshes = get_roads(
             lat, lon, function_inputs.radius_in_meters, angle_rad
         )
@@ -179,7 +179,6 @@ def automate_function(
         )
 
         # create and add a basemap png file
-        time_start_img = datetime.now()
         # print("Create 2d image")
         # path = create_image_from_bbox(lat, lon, function_inputs.radius_in_meters)
         # print(datetime.now() - time_start_img)

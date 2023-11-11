@@ -6,6 +6,7 @@ from specklepy.objects.geometry import Mesh
 from utils.utils_geometry import (
     create_flat_mesh,
     extrude_building,
+    generate_tree,
     join_roads,
     road_buffer,
     rotate_pt,
@@ -509,7 +510,7 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
     all_green_polygons = (
         all_landuse_polygons + all_natural_polygons + all_leisure_polygons
     )
-    # trees_node = [] # natural: tree, natural: tree_row,
+    trees_nodes = []  # natural: tree, natural: tree_row,
 
     time_start_loops = datetime.now()
     objectGroup = []
@@ -561,8 +562,17 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
             # get nodes (that don't have tags)
             elif feature["type"] == "node":
                 try:
-                    # don't consider trees yet
+                    # consider trees yet
                     feature["tags"]
+                    if feature["tags"][keyword] == "tree":
+                        trees_nodes.append(
+                            {
+                                "id": feature["id"],
+                                "tree": feature["tags"][keyword],
+                                "lat": feature["lat"],
+                                "lon": feature["lon"],
+                            }
+                        )
                 except:
                     nodes.append(
                         {
@@ -637,22 +647,11 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
                         coords.append({"x": x, "y": y})
                         break
 
-            time_end_reproject = datetime.now()
-            time_reproject_node += time_end_reproject - time_start_reproject
-
             if angle_rad == 0:
                 obj = create_flat_mesh(coords)
             else:
-                time_start_rotate = datetime.now()
                 rotated_coords = [rotate_pt(c, angle_rad) for c in coords]
-
-                time_end_rotate = datetime.now()
-                time_start_extrude = datetime.now()
                 obj = create_flat_mesh(rotated_coords)
-                time_end_extrude = datetime.now()
-
-            time_extrusions += time_end_extrude - time_start_extrude
-            time_rotations += time_end_rotate - time_start_rotate
 
             if obj is not None:
                 for keyword in all_keywords:
@@ -670,5 +669,27 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
                         pass
 
             coords = None
+    # generate trees:
+    for tree in trees_nodes:
+        x, y = reproject_to_crs(
+            tree["lat"], tree["lon"], "EPSG:4326", projected_crs
+        )
+        coords_tree = {"x": x, "y": y}
+
+        if angle_rad == 0:
+            obj = generate_tree(tree, coords_tree)
+        else:
+            rotated_coords = rotate_pt(coords_tree, angle_rad) 
+            obj = generate_tree(tree, rotated_coords)
+
+        if obj is not None:
+            base_obj = Base(
+                units="m",
+                displayValue=[obj],
+                keyword=tags[i][keyword],
+                source_data="© OpenStreetMap",
+                source_url="https://www.openstreetmap.org/",
+            )
+            objectGroup.append(base_obj)
 
     return objectGroup
