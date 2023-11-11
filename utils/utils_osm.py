@@ -162,8 +162,7 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
                     node_list = ways_part[k]["nodes"].copy()
                     if (
                         len(full_node_list) > 0
-                        and full_node_list[len(full_node_list) - 1]
-                        == node_list[len(node_list) - 1]
+                        and full_node_list[len(full_node_list) - 1] != node_list[0]
                     ):
                         node_list.reverse()
                     node_list = [
@@ -188,8 +187,7 @@ def get_buildings(lat: float, lon: float, r: float, angle_rad: float) -> list[Ba
                     node_list = ways_part[k]["nodes"].copy()
                     if (
                         len(local_node_list) > 0
-                        and local_node_list[len(local_node_list) - 1]
-                        == node_list[len(node_list) - 1]
+                        and local_node_list[len(local_node_list) - 1] != node_list[0]
                     ):
                         node_list.reverse()
                     node_list = [
