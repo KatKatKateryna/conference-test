@@ -227,6 +227,36 @@ def rotate_pt(coord: dict, angle: float) -> dict:
     return {"x": x2, "y": y2}
 
 
+def create_flat_mesh(coords: list[dict], color=None) -> Mesh:
+    """Create a polygon facing up, no voids."""
+
+    if len(coords) < 3:
+        return None
+    vertices = []
+    faces = []
+    colors = []
+    if color is None:  # apply green
+        color = (255 << 24) + (30 << 16) + (100 << 8) + 5  # argb
+
+    # bottom
+    bottom_vert_indices = list(range(len(coords)))
+    bottom_vertices = [[c["x"], c["y"]] for c in coords]
+    bottom_vert_indices, clockwise_orientation = fix_orientation(
+        bottom_vertices, bottom_vert_indices
+    )
+    bottom_vert_indices.reverse()
+
+    for c in coords:
+        vertices.extend([c["x"], c["y"], 0])
+        colors.append(color)
+    faces.extend([len(coords)] + bottom_vert_indices)
+
+    obj = Mesh.create(faces=faces, vertices=vertices, colors=colors)
+    obj.units = "m"
+
+    return obj
+
+
 def extrude_building_simple(
     coords: list[dict], coords_inner: list[list[dict]], height: float
 ) -> Mesh:
@@ -284,6 +314,7 @@ def extrude_building_simple(
 
     return obj
 
+
 def extrude_building(
     coords: list[dict], coords_inner: list[list[dict]], height: float
 ) -> Mesh:
@@ -291,10 +322,11 @@ def extrude_building(
 
     if len(coords) < 3:
         return None
-    if len(coords_inner)==0:
+    if len(coords_inner) == 0:
         return extrude_building_simple(coords, coords_inner, height)
-    else: 
+    else:
         return extrude_building_complex(coords, coords_inner, height)
+
 
 def extrude_building_complex(
     coords: list[dict], coords_inner: list[list[dict]], height: float

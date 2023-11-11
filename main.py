@@ -14,7 +14,7 @@ from speckle_automate import (
 from specklepy.objects.other import Collection
 from specklepy.api.wrapper import StreamWrapper
 
-from utils.utils_osm import get_buildings, get_roads
+from utils.utils_osm import get_buildings, get_nature, get_roads
 from utils.utils_other import RESULT_BRANCH
 from utils.utils_png import create_image_from_bbox
 from gql import gql
@@ -124,7 +124,18 @@ def automate_function(
             lat, lon, function_inputs.radius_in_meters, angle_rad
         )
 
+        nature_base_objects = get_nature(
+            lat, lon, function_inputs.radius_in_meters, angle_rad
+        )
         # create layers for buildings and roads
+        nature_layer = Collection(
+            elements=nature_base_objects,
+            units="m",
+            name="Context: Nature",
+            collectionType="NatureMeshesLayer",
+            source_data="© OpenStreetMap",
+            source_url="https://www.openstreetmap.org/",
+        )
         building_layer = Collection(
             elements=building_base_objects,
             units="m",
@@ -154,7 +165,7 @@ def automate_function(
 
         # add layers to a commit Collection object
         commit_obj = Collection(
-            elements=[building_layer, roads_mesh_layer],
+            elements=[building_layer, roads_mesh_layer, nature_layer],
             units="m",
             name="Context",
             collectionType="ContextLayer",

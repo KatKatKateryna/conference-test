@@ -4,6 +4,7 @@ from specklepy.objects import Base
 from specklepy.objects.geometry import Mesh
 
 from utils.utils_geometry import (
+    create_flat_mesh,
     extrude_building,
     join_roads,
     road_buffer,
@@ -440,9 +441,9 @@ def get_roads(lat: float, lon: float, r: float, angle_rad: float) -> tuple[list[
 
         value = 2
         if tags[i][keyword] in ["primary"]:
-            value = 12
+            value = 9
         elif tags[i][keyword] in ["secondary"]:
-            value = 7
+            value = 6
         try:
             if tags[i]["area"] == "yes":
                 value = None
@@ -482,3 +483,188 @@ def get_roads(lat: float, lon: float, r: float, angle_rad: float) -> tuple[list[
     print(f"Time join roads:{time_join}")
     print(f"Time buffer roads:{time_buffer}")
     return objectGroup, meshGroup
+
+
+def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]:
+    """Get a list of 3d Meshes of buildings by lat&lon (degrees) and radius (meters)."""
+    # https://towardsdatascience.com/loading-data-from-openstreetmap-with-python-and-the-overpass-api-513882a27fd0
+    features = []
+    all_keywords = ["landuse", "natural", "leisure"]
+
+    for keyword in all_keywords:
+        min_lat_lon, max_lat_lon = get_degrees_bbox_from_lat_lon_rad(lat, lon, r)
+        features_part = get_features_from_osm_server(keyword, min_lat_lon, max_lat_lon)
+        features.extend(features_part)
+
+    ways = []
+    tags = []
+    rel_outer_ways = []
+    rel_outer_ways_tags = []
+    ways_part = []
+    nodes = []
+
+    all_landuse_polygons = ["forest", "meadow", "grass"]
+    all_natural_polygons = ["scrub", "grassland"]
+    all_leisure_polygons = ["nature_reserve", "garden", "park", "playground"]
+    all_green_polygons = (
+        all_landuse_polygons + all_natural_polygons + all_leisure_polygons
+    )
+    # trees_node = [] # natural: tree, natural: tree_row,
+
+    time_start_loops = datetime.now()
+    objectGroup = []
+    for keyword in all_keywords:
+        for feature in features:
+            trees = ""
+            # ways
+            if feature["type"] == "way":
+                try:
+                    if feature["tags"][keyword] not in all_green_polygons:
+                        continue
+                    feature["id"]
+                    feature["nodes"]
+                    tags.append(
+                        {f"{keyword}": feature["tags"][keyword], "trees": trees}
+                    )
+                    ways.append(
+                        {
+                            "nodes": feature["nodes"],
+                        }
+                    )
+                except:
+                    pass
+                    # ways_part.append({"id": feature["id"], "nodes": feature["nodes"]})
+
+            # relations
+            elif feature["type"] == "relation":
+                try:
+                    if feature["tags"][keyword] not in all_green_polygons:
+                        continue
+                    outer_ways = []
+                    outer_ways_tags = {
+                        f"{keyword}": feature["tags"][keyword],
+                        "trees": trees,
+                    }
+
+                    for n, x in enumerate(feature["members"]):
+                        # if several Outer ways, combine them
+                        if (
+                            feature["members"][n]["type"] == "way"
+                            and feature["members"][n]["role"] == "outer"
+                        ):
+                            outer_ways.append({"ref": feature["members"][n]["ref"]})
+
+                    rel_outer_ways.append(outer_ways)
+                    rel_outer_ways_tags.append(outer_ways_tags)
+                except:
+                    pass
+
+            # get nodes (that don't have tags)
+            elif feature["type"] == "node":
+                try:
+                    # don't consider trees yet
+                    feature["tags"]
+                except:
+                    nodes.append(
+                        {
+                            "id": feature["id"],
+                            "lat": feature["lat"],
+                            "lon": feature["lon"],
+                        }
+                    )
+
+        # turn relations_OUTER into ways
+        for n, x in enumerate(rel_outer_ways):
+            # there will be a list of "ways" in each of rel_outer_ways
+            full_node_list = []
+            for m, y in enumerate(rel_outer_ways[n]):
+                # find ways_parts with corresponding ID
+                for k, z in enumerate(ways_part):
+                    if k == len(ways_part):
+                        break
+
+                    if rel_outer_ways[n][m]["ref"] == ways_part[k]["id"]:
+                        # reverse way part is needed
+                        node_list = ways_part[k]["nodes"].copy()
+                        if (
+                            len(full_node_list) > 0
+                            and full_node_list[len(full_node_list) - 1] != node_list[0]
+                        ):
+                            node_list.reverse()
+                        node_list = [
+                            n
+                            for j, n in enumerate(node_list)
+                            if (n not in full_node_list or j == len(node_list) - 1)
+                        ]
+
+                        full_node_list += node_list
+                        item = ways_part.pop(k)  # remove used ways_parts
+                        ways_part.append(item)
+                        k -= 1  # reset index
+                        break
+
+            ways.append({"nodes": full_node_list})
+            tags.append(
+                {
+                    f"{keyword}": rel_outer_ways_tags[n][keyword],
+                    "trees": rel_outer_ways_tags[n]["trees"],
+                }
+            )
+
+        projected_crs = create_crs(lat, lon)
+
+        time_end_loops = datetime.now()
+        print(f"Landuse loops time: {time_end_loops- time_start_loops}")
+        time_extrusions = time_end_loops - time_end_loops
+        time_rotations = time_end_loops - time_end_loops
+        time_reproject_node = time_end_loops - time_end_loops
+
+        # get coords of Ways
+
+        for i, x in enumerate(ways):
+            ids = ways[i]
+            coords = []  # replace node IDs with actual coords for each Way
+
+            time_start_reproject = datetime.now()
+            # go through each external node of the Way
+            for k, _ in enumerate(ids["nodes"]):
+                if k == len(ids["nodes"]) - 1:
+                    continue  # ignore last
+                for n, z in enumerate(nodes):  # go though all nodes
+                    if ids["nodes"][k] == nodes[n]["id"]:
+                        x, y = reproject_to_crs(
+                            nodes[n]["lat"], nodes[n]["lon"], "EPSG:4326", projected_crs
+                        )
+                        coords.append({"x": x, "y": y})
+                        break
+
+            time_end_reproject = datetime.now()
+            time_reproject_node += time_end_reproject - time_start_reproject
+
+            if angle_rad == 0:
+                obj = create_flat_mesh(coords)
+            else:
+                time_start_rotate = datetime.now()
+                rotated_coords = [rotate_pt(c, angle_rad) for c in coords]
+
+                time_end_rotate = datetime.now()
+                time_start_extrude = datetime.now()
+                obj = create_flat_mesh(rotated_coords)
+                time_end_extrude = datetime.now()
+
+            time_extrusions += time_end_extrude - time_start_extrude
+            time_rotations += time_end_rotate - time_start_rotate
+
+            if obj is not None:
+                base_obj = Base(
+                    units="m",
+                    displayValue=[obj],
+                    keyword=tags[i][keyword],
+                    source_data="© OpenStreetMap",
+                    source_url="https://www.openstreetmap.org/",
+                )
+                objectGroup.append(base_obj)  # (obj, tags[i]["building"]))
+
+            coords = None
+
+    return objectGroup

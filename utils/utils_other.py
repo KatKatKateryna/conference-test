@@ -3,7 +3,7 @@ from copy import copy
 from utils.utils_pyproj import create_crs, reproject_to_crs
 
 RESULT_BRANCH = "automate"
-COLOR_ROAD = (255 << 24) + (20 << 16) + (20 << 8) + 20  # argb
+COLOR_ROAD = (255 << 24) + (30 << 16) + (30 << 8) + 30  # argb
 COLOR_BLD = (255 << 24) + (230 << 16) + (230 << 8) + 230  # argb
 COLOR_VISIBILITY = (255 << 24) + (255 << 16) + (10 << 8) + 10  # argb
 
