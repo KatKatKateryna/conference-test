@@ -19,6 +19,7 @@ from shapely.ops import triangulate
 from specklepy.objects import Base
 from specklepy.objects.geometry import Mesh, Point, Polyline
 import random
+from assets.trees import COLORS, FACES, VERTICES, TEXTURE_COORDS
 
 from utils.utils_other import (
     COLOR_BLD,
@@ -541,25 +542,22 @@ def generate_tree(tree: dict, coords: dict) -> Mesh():
     obj = None
     try:
         vertices = []
-        faces = []
-        colors = []
-        # if color is None:  # apply green
-        color = (255 << 24) + (20 << 16) + (250 << 8) + 7  # argb
-        all_coords = []
+        for i, pt in enumerate(VERTICES):
+            if i % 3 == 0:
+                vertices.append(pt + coords["x"])
+            elif i % 3 == 1:
+                vertices.append(pt + coords["y"])
+            else:
+                vertices.append(pt)
 
-        all_coords.append([coords["x"], coords["y"], 0])
-        all_coords.append([coords["x"], coords["y"], 10])
-        all_coords.append([coords["x"] + 3, coords["y"], 10])
-        all_coords.append([coords["x"] + 3, coords["y"], 0])
-
-        for c in all_coords:
-            vertices.extend([c[0], c[1], c[2]])
-            colors.append(color)
-        faces.extend([len(all_coords)] + list(range(len(all_coords))))
-
-        obj = Mesh.create(faces=faces, vertices=vertices, colors=colors)
+        obj = Mesh.create(
+            faces=FACES,
+            vertices=vertices,
+            colors=COLORS,
+            texture_coordinates=TEXTURE_COORDS,
+        )
         obj.units = "m"
-    except:
+    except Exception as e:
         pass
 
     return obj

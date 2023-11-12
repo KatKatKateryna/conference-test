@@ -720,7 +720,7 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
             base_obj = Base(
                 units="m",
                 displayValue=[obj],
-                keyword=tags[i][keyword],
+                natural="tree",
                 source_data="© OpenStreetMap",
                 source_url="https://www.openstreetmap.org/",
             )
