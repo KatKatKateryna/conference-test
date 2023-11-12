@@ -88,6 +88,8 @@ def automate_function(
         building_layer = Collection(
             elements=building_base_objects,
             units="m",
+            latitude=lat,
+            longitude=lon,
             name="Context: Buildings",
             collectionType="BuildingsMeshesLayer",
             source_data="© OpenStreetMap",
@@ -97,6 +99,8 @@ def automate_function(
         roads_line_layer = Collection(
             elements=roads_lines,
             units="m",
+            latitude=lat,
+            longitude=lon,
             name="Context: Roads (Polylines)",
             collectionType="RoadPolyinesLayer",
             source_data="© OpenStreetMap",
@@ -106,6 +110,8 @@ def automate_function(
         roads_mesh_layer = Collection(
             elements=roads_meshes,
             units="m",
+            latitude=lat,
+            longitude=lon,
             name="Context: Roads (Meshes)",
             collectionType="RoadMeshesLayer",
             source_data="© OpenStreetMap",
@@ -114,6 +120,8 @@ def automate_function(
         nature_layer = Collection(
             elements=nature_base_objects,
             units="m",
+            latitude=lat,
+            longitude=lon,
             name="Context: Nature",
             collectionType="NatureMeshesLayer",
             source_data="© OpenStreetMap",
@@ -124,6 +132,8 @@ def automate_function(
         commit_obj = Collection(
             elements=[building_layer, roads_mesh_layer, nature_layer],
             units="m",
+            latitude=lat,
+            longitude=lon,
             name="Context",
             collectionType="ContextLayer",
             source_data="© OpenStreetMap",
@@ -182,9 +192,9 @@ from stringcase import camelcase
 
 project_id = "23c31c18f5"  # "aeb6aa8a6c"
 model_id = "3080ebb3c8"
-radius_in_meters = 160
+radius_in_meters = 500
 include_nature = True
-generate_image = False
+generate_image = True
 
 # get client
 account = get_local_accounts()[1]
