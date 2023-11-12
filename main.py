@@ -117,9 +117,9 @@ def automate_function(
             angle_rad = 0
 
         # get OSM buildings and roads in given area
-        building_base_objects = []  # get_buildings(
-        #    lat, lon, function_inputs.radius_in_meters, angle_rad
-        # )
+        building_base_objects = get_buildings(
+            lat, lon, function_inputs.radius_in_meters, angle_rad
+        )
         roads_lines, roads_meshes = get_roads(
             lat, lon, function_inputs.radius_in_meters, angle_rad
         )

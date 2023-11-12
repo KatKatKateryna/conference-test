@@ -241,7 +241,7 @@ def create_flat_mesh(coords: list[dict], color=None) -> Mesh:
     faces = []
     colors = []
     if color is None:  # apply green
-        color = (255 << 24) + (20 << 16) + (50 << 8) + 7  # argb
+        color = (255 << 24) + (20 << 16) + (50 << 8) + 10  # argb
 
     # bottom
     bottom_vert_indices = list(range(len(coords)))
@@ -540,15 +540,22 @@ def join_roads(coords: list[dict], closed: bool, height: float) -> Polyline:
 def generate_tree(tree: dict, coords: dict) -> Mesh():
     """Create a 3d tree in a given location."""
     obj = None
+    scale = random.randint(80, 140) / 100
+    scale_z = random.randint(80, 140) / 100
+    if tree["id"] == "forest":
+        scale *= 2
+        scale_z *= 2
+    angle_rad = random.randint(-200, 200) / 100
     try:
         vertices = []
-        for i, pt in enumerate(VERTICES):
-            if i % 3 == 0:
-                vertices.append(pt + coords["x"])
-            elif i % 3 == 1:
-                vertices.append(pt + coords["y"])
-            else:
-                vertices.append(pt)
+        for i in range(int(len(VERTICES) / 3)):
+            xy = rotate_pt(
+                {"x": VERTICES[3 * i] * scale, "y": VERTICES[3 * i + 1] * scale},
+                angle_rad,
+            )
+            vertices.append(xy["x"] + coords["x"])
+            vertices.append(xy["y"] + coords["y"])
+            vertices.append(VERTICES[3 * i + 2] * scale_z)
 
         obj = Mesh.create(
             faces=FACES,

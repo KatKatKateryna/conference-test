@@ -662,7 +662,7 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
             if len(tree_polygon) > 3:
                 new_tree_pts = generate_points_inside_polygon(tree_polygon)
                 for pt in new_tree_pts:
-                    trees_nodes.append({"id": "", "lon": pt[0], "lat": pt[1]})
+                    trees_nodes.append({"id": "forest", "lon": pt[0], "lat": pt[1]})
 
             if angle_rad == 0:
                 obj = create_flat_mesh(coords)
