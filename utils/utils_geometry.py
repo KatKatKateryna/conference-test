@@ -531,8 +531,8 @@ def join_roads(coords: list[dict], closed: bool, height: float) -> Polyline:
     poly = Polyline.from_points(points)
     poly.closed = closed
     poly.units = "m"
-    poly.source_data = ("© OpenStreetMap",)
-    poly.source_url = ("https://www.openstreetmap.org/",)
+    poly.source_data = "© OpenStreetMap"
+    poly.source_url = "https://www.openstreetmap.org/"
 
     return poly
 
