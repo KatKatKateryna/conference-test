@@ -3,6 +3,7 @@
 use the automation_context module to wrap your function in an Autamate context helper
 """
 
+import datetime
 import numpy as np
 from pydantic import Field
 from speckle_automate import (
@@ -136,7 +137,11 @@ def automate_function(
 
         # create and add a basemap png file
         if function_inputs.generate_image is True:
+            time_img_start = datetime.now()
             path = create_image_from_bbox(lat, lon, function_inputs.radius_in_meters)
+            print(path)
+            time_img_end = datetime.now()
+            print(time_img_end - time_img_start)
             automate_context.store_file_result(path)
 
         # automate_context.set_context_view(
@@ -177,7 +182,9 @@ from stringcase import camelcase
 
 project_id = "23c31c18f5"  # "aeb6aa8a6c"
 model_id = "3080ebb3c8"
-radius_in_meters = 200
+radius_in_meters = 160
+include_nature = True
+generate_image = False
 
 # get client
 account = get_local_accounts()[1]
@@ -212,7 +219,9 @@ automate_context = AutomationContext(
     automation_run_data, speckle_client, server_transport, account.token
 )
 function_inputs = FunctionInputs(
-    radius_in_meters=radius_in_meters, include_nature=True, generate_image=False
+    radius_in_meters=radius_in_meters,
+    include_nature=include_nature,
+    generate_image=generate_image,
 )
 
 # execute_automate_function(automate_function, FunctionInputs)
