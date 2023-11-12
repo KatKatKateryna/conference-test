@@ -7,14 +7,18 @@ import geopandas as gpd
 import numpy as np
 from geovoronoi import voronoi_regions_from_coords
 from shapely import (
+    Point as shapely_Point,
     LineString,
-    Polygon,
+    Polygon as shapely_Polygon,
     buffer,
     to_geojson,
 )
+from shapely.affinity import affine_transform
+
 from shapely.ops import triangulate
 from specklepy.objects import Base
 from specklepy.objects.geometry import Mesh, Point, Polyline
+import random
 
 from utils.utils_other import (
     COLOR_BLD,
@@ -132,9 +136,9 @@ def to_triangles(
         time_start_check_holes = datetime.now()
         # check if sufficient holes vertices were added
         if len(holes) == 1 and len(holes[0]) == 0:
-            polygon = Polygon([(v[0], v[1]) for v in vert])
+            polygon = shapely_Polygon([(v[0], v[1]) for v in vert])
         else:
-            polygon = Polygon([(v[0], v[1]) for v in vert], holes)
+            polygon = shapely_Polygon([(v[0], v[1]) for v in vert], holes)
 
         # print(f"Check holes: {datetime.now() - time_start_check_holes}")
 
@@ -561,17 +565,11 @@ def generate_tree(tree: dict, coords: dict) -> Mesh():
     return obj
 
 
-def generate_points_inside_polygon():
+def generate_points_inside_polygon(polygon_pts: list[tuple], point_number: int = 3):
     """Populate polygon with points."""
     # https://codereview.stackexchange.com/questions/69833/generate-sample-coordinates-inside-a-polygon
-    import random
-    from shapely.affinity import affine_transform
-    from shapely.geometry import Point, Polygon
-    from shapely.ops import triangulate
 
-    polygon = Polygon([(0, 0), (5, 0), (0, 1)])
-    k = 500
-
+    polygon = shapely_Polygon(polygon_pts)
     areas = []
     transforms = []
     for t in triangulate(polygon):
@@ -579,14 +577,13 @@ def generate_points_inside_polygon():
         (x0, y0), (x1, y1), (x2, y2), _ = t.exterior.coords
         transforms.append([x1 - x0, x2 - x0, y2 - y0, y1 - y0, x0, y0])
     points = []
-    for transform in random.choices(transforms, weights=areas, k=k):
+    for transform in random.choices(transforms, weights=areas, k=point_number):
         x, y = [random.random() for _ in range(2)]
         if x + y > 1:
-            p = Point(1 - x, 1 - y)
+            p = shapely_Point(1 - x, 1 - y)
         else:
-            p = Point(x, y)
+            p = shapely_Point(x, y)
         points.append(affine_transform(p, transform))
-
     coords = np.array([p.coords for p in points]).reshape(-1, 2)
-    print(coords)
+    coords = [p.coords[0] for p in points]
     return coords

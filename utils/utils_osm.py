@@ -6,6 +6,7 @@ from specklepy.objects.geometry import Mesh
 from utils.utils_geometry import (
     create_flat_mesh,
     extrude_building,
+    generate_points_inside_polygon,
     generate_tree,
     join_roads,
     road_buffer,
@@ -521,8 +522,13 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
             # ways
             if feature["type"] == "way":
                 try:
+                    if "6060078867" in feature["nodes"]:
+                        print(feature)
+
                     if feature["tags"][keyword] == "tree_row":
                         tree_rows.append({"nodes": feature["nodes"]})
+                    if feature["tags"][keyword] == "forest":
+                        trees = "trees"
 
                     if feature["tags"][keyword] not in all_green_polygons:
                         continue
@@ -542,6 +548,11 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
             # relations
             elif feature["type"] == "relation":
                 try:
+                    if feature["tags"][keyword] == "tree_row":
+                        tree_rows.append({"nodes": feature["nodes"]})
+                    if feature["tags"][keyword] == "forest":
+                        trees = "trees"
+
                     if feature["tags"][keyword] not in all_green_polygons:
                         continue
                     outer_ways = []
@@ -626,29 +637,32 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
 
         projected_crs = create_crs(lat, lon)
 
-        time_end_loops = datetime.now()
-        print(f"Landuse loops time: {time_end_loops- time_start_loops}")
-        time_extrusions = time_end_loops - time_end_loops
-        time_rotations = time_end_loops - time_end_loops
-        time_reproject_node = time_end_loops - time_end_loops
-
         # get coords of Ways - polygons
         for i, x in enumerate(ways):
             ids = ways[i]
             coords = []  # replace node IDs with actual coords for each Way
+            tree_polygon = []
 
-            time_start_reproject = datetime.now()
             # go through each external node of the Way
             for k, _ in enumerate(ids["nodes"]):
                 if k == len(ids["nodes"]) - 1:
                     continue  # ignore last
                 for n, z in enumerate(nodes):  # go though all nodes
                     if ids["nodes"][k] == nodes[n]["id"]:
+                        # tree_polygon
+                        if tags[i]["trees"] != "":
+                            tree_polygon.append((nodes[n]["lon"], nodes[n]["lat"]))
+
                         x, y = reproject_to_crs(
                             nodes[n]["lat"], nodes[n]["lon"], "EPSG:4326", projected_crs
                         )
                         coords.append({"x": x, "y": y})
                         break
+
+            if len(tree_polygon) > 3:
+                new_tree_pts = generate_points_inside_polygon(tree_polygon)
+                for pt in new_tree_pts:
+                    trees_nodes.append({"id": "", "lon": pt[0], "lat": pt[1]})
 
             if angle_rad == 0:
                 obj = create_flat_mesh(coords)
@@ -684,9 +698,9 @@ def get_nature(lat: float, lon: float, r: float, angle_rad: float) -> list[Base]
                             "y": nodes[n]["lat"],
                             "x": nodes[n]["lon"],
                         }
-                        #if new_item not in coords_tree_row:
-                        coords_tree_row.append(new_item)
-                        #break
+                        if new_item not in coords_tree_row:
+                            coords_tree_row.append(new_item)
+                        break
 
             for w, pt in enumerate(coords_tree_row):
                 trees_nodes.append({"id": pt["id"], "lon": pt["x"], "lat": pt["y"]})
