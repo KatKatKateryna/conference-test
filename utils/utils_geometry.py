@@ -232,7 +232,7 @@ def rotate_pt(coord: dict, angle: float) -> dict:
     return {"x": x2, "y": y2}
 
 
-def create_flat_mesh(coords: list[dict], color=None) -> Mesh:
+def create_flat_mesh(coords: list[dict], color=None, elevation: float = 0.005) -> Mesh:
     """Create a polygon facing up, no voids."""
 
     if len(coords) < 3:
@@ -241,7 +241,7 @@ def create_flat_mesh(coords: list[dict], color=None) -> Mesh:
     faces = []
     colors = []
     if color is None:  # apply green
-        color = (255 << 24) + (20 << 16) + (50 << 8) + 10  # argb
+        color = (255 << 24) + (25 << 16) + (50 << 8) + 13  # argb
 
     # bottom
     bottom_vert_indices = list(range(len(coords)))
@@ -252,7 +252,7 @@ def create_flat_mesh(coords: list[dict], color=None) -> Mesh:
     bottom_vert_indices.reverse()
 
     for c in coords:
-        vertices.extend([c["x"], c["y"], 0])
+        vertices.extend([c["x"], c["y"], elevation])
         colors.append(color)
     faces.extend([len(coords)] + bottom_vert_indices)
 

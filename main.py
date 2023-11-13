@@ -35,10 +35,6 @@ class FunctionInputs(AutomateBase):
             "Radius from the Model location," " derived from Revit model lat, lon."
         ),
     )
-    include_nature: bool = Field(
-        title="Include natural elements",
-        description=("Include natural elements (grass, trees etc.)"),
-    )
     generate_image: bool = Field(
         title="Generate a 2d map",
         description=(
@@ -77,12 +73,9 @@ def automate_function(
         roads_lines, roads_meshes = get_roads(
             lat, lon, function_inputs.radius_in_meters, angle_rad
         )
-        if function_inputs.include_nature is True:
-            nature_base_objects = get_nature(
-                lat, lon, function_inputs.radius_in_meters, angle_rad
-            )
-        else:
-            nature_base_objects = []
+        nature_base_objects = get_nature(
+            lat, lon, function_inputs.radius_in_meters, angle_rad
+        )
 
         # create layers for buildings and roads
         building_layer = Collection(
@@ -192,9 +185,8 @@ from stringcase import camelcase
 
 project_id = "23c31c18f5"  # "aeb6aa8a6c"
 model_id = "3080ebb3c8"
-radius_in_meters = 500
-include_nature = True
-generate_image = True
+radius_in_meters = 200
+generate_image = False
 
 # get client
 account = get_local_accounts()[1]
@@ -230,7 +222,6 @@ automate_context = AutomationContext(
 )
 function_inputs = FunctionInputs(
     radius_in_meters=radius_in_meters,
-    include_nature=include_nature,
     generate_image=generate_image,
 )
 

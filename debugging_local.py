@@ -19,8 +19,6 @@ branch: Branch = client.branch.get(project_id, model_id, 1)
 commit = branch.commits.items[0]
 server_transport = ServerTransport(project_id, client)
 base1 = receive(branch.commits.items[0].referencedObject, server_transport)
-# base2 = receive(branch.commits.items[1].referencedObject, server_transport)
-# base3 = receive(branch.commits.items[2].referencedObject, server_transport)
 mesh = base1["@Data"]["@{0}"][0]
 # print(mesh.vertices)
 # print(mesh.faces)
